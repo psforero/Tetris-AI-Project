@@ -141,6 +141,54 @@ class Piece(object):
         self.rotation = 0  # number from 0-3
 
 
+
+class GameState:
+    LEFT = 1
+    RIGHT = 2
+    DOWN = 3
+    ROTATE = 4
+
+    def __init__(self, locked_positions, current_piece, next_piece):
+        self.locked = locked_positions
+        self.current = current_piece
+        self.next = next_piece
+        self.grid = create_grid(locked_positions)
+
+    def advance(self):
+        # moves current piece down
+        # returns bool indicating if piece needs changing
+        # TODO should return new game state for learning
+        # this will involve cloning current and next as well
+        
+        self.current.y += 1
+
+        if not (valid_space(self.current, self.grid)) and self.current.y > 0:
+            self.current.y -= 1
+            return True
+        return False
+    
+    def do_action(self, action):
+
+        if action == self.LEFT:
+            self.current.x -= 1
+            if not valid_space(self.current, self.grid):
+                self.current.x += 1
+        elif action == self.RIGHT:
+            self.current.x += 1
+            if not valid_space(self.current, self.grid):
+                self.current.x -= 1
+        elif action == self.ROTATE:
+            self.current.rotation = self.current.rotation + 1 % len(self.current.shape)
+            if not valid_space(self.current, self.grid):
+                self.current.rotation = self.current.rotation - 1 % len(self.current.shape)
+        elif action == self.DOWN:
+            self.current.y += 1
+            if not valid_space(self.current, self.grid):
+                self.current.y -= 1
+
+        return GameState(self.locked, self.current, self.next)
+
+
 def create_grid(locked_positions={}):
     grid = [[(0,0,0) for x in range(10)] for x in range(20)]
 
@@ -189,7 +237,7 @@ def check_lost(positions):
     return False
 
 
-def get_shape():
+def get_random_shape():
     global shapes, shape_colors
 
     return Piece(5, 0, random.choice(shapes))
@@ -251,7 +299,7 @@ def draw_next_shape(shape, surface):
     surface.blit(label, (sx + 10, sy- 30))
 
 
-def draw_window(surface):
+def draw_window(surface, grid):
     surface.fill((0,0,0))
     # Tetris Title
     font = pygame.font.SysFont('comicsans', 60)
@@ -268,34 +316,28 @@ def draw_window(surface):
     pygame.draw.rect(surface, (255, 0, 0), (top_left_x, top_left_y, play_width, play_height), 5)
     # pygame.display.update()
 
-
 def main():
-    global grid
-
-    locked_positions = {}  # (x,y):(255,0,0)
-    grid = create_grid(locked_positions)
+    state = GameState(
+        locked_positions = {}, # (x,y):(255,0,0)
+        current_piece = get_random_shape(),
+        next_piece = get_random_shape()
+    )
 
     change_piece = False
     run = True
-    current_piece = get_shape()
-    next_piece = get_shape()
+
     clock = pygame.time.Clock()
     fall_time = 0
 
     while run:
         fall_speed = 0.27
-
-        grid = create_grid(locked_positions)
         fall_time += clock.get_rawtime()
         clock.tick()
 
         # PIECE FALLING CODE
         if fall_time/1000 >= fall_speed:
             fall_time = 0
-            current_piece.y += 1
-            if not (valid_space(current_piece, grid)) and current_piece.y > 0:
-                current_piece.y -= 1
-                change_piece = True
+            change_piece = state.advance()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -305,58 +347,43 @@ def main():
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_LEFT:
-                    current_piece.x -= 1
-                    if not valid_space(current_piece, grid):
-                        current_piece.x += 1
-
+                    state = state.do_action(GameState.LEFT)
                 elif event.key == pygame.K_RIGHT:
-                    current_piece.x += 1
-                    if not valid_space(current_piece, grid):
-                        current_piece.x -= 1
+                    state = state.do_action(GameState.RIGHT)
                 elif event.key == pygame.K_UP:
-                    # rotate shape
-                    current_piece.rotation = current_piece.rotation + 1 % len(current_piece.shape)
-                    if not valid_space(current_piece, grid):
-                        current_piece.rotation = current_piece.rotation - 1 % len(current_piece.shape)
+                    state = state.do_action(GameState.ROTATE)
+                elif event.key == pygame.K_DOWN:
+                    state = state.do_action(GameState.DOWN)
 
-                if event.key == pygame.K_DOWN:
-                    # move shape down
-                    current_piece.y += 1
-                    if not valid_space(current_piece, grid):
-                        current_piece.y -= 1
+        shape_pos = convert_shape_format(state.current)
 
-                '''if event.key == pygame.K_SPACE:
-                    while valid_space(current_piece, grid):
-                        current_piece.y += 1
-                    current_piece.y -= 1
-                    print(convert_shape_format(current_piece))'''  # todo fix
-
-        shape_pos = convert_shape_format(current_piece)
+        grid = create_grid(state.locked)
 
         # add piece to the grid for drawing
         for i in range(len(shape_pos)):
             x, y = shape_pos[i]
             if y > -1:
-                grid[y][x] = current_piece.color
+                grid[y][x] = state.current.color
 
         # IF PIECE HIT GROUND
         if change_piece:
             for pos in shape_pos:
                 p = (pos[0], pos[1])
-                locked_positions[p] = current_piece.color
-            current_piece = next_piece
-            next_piece = get_shape()
+                state.locked[p] = state.current.color
+            state.current = state.next
+            state.next = get_random_shape()
             change_piece = False
 
             # call four times to check for multiple clear rows
-            clear_rows(grid, locked_positions)
+            # TODO try this ^ and confirm it works?
+            clear_rows(grid, state.locked)
 
-        draw_window(win)
-        draw_next_shape(next_piece, win)
+        draw_window(win, grid)
+        draw_next_shape(state.next, win)
         pygame.display.update()
 
         # Check if user lost
-        if check_lost(locked_positions):
+        if check_lost(state.locked):
             run = False
 
     draw_text_middle("You Lost", 40, (255,255,255), win)
