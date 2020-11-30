@@ -3,7 +3,7 @@ AI agent that plays Tetris. Divided into three main parts: the game logic and GU
 
 ## Initial Setup
 
-This repo uses python3's virtualenvs. See the [documentation](https://docs.python.org/3/tutorial/venv.html).
+This repo uses python 3's virtualenvs. See the [documentation](https://docs.python.org/3/tutorial/venv.html).
 
 Create a virtualenv (only do this once)
 
@@ -24,7 +24,7 @@ source env/bin/activate
 Do this the first time and when requirements have changed.
 
 ```
-pip install -m requirements.txt
+pip install -r requirements.txt
 ```
 
 If you you've updated requirements, please add them to the requirements.txt file:
