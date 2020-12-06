@@ -1,5 +1,6 @@
 import pygame
 import random
+import copy
 
 """
 10 x 20 square grid
@@ -141,7 +142,6 @@ class Piece(object):
         self.rotation = 0  # number from 0-3
 
 
-
 class GameState:
     LEFT = 1
     RIGHT = 2
@@ -153,40 +153,41 @@ class GameState:
         self.current = current_piece
         self.next = next_piece
         self.grid = create_grid(locked_positions)
+        self.lost = False
 
-    def advance(self):
-        # moves current piece down
-        # returns bool indicating if piece needs changing
-        # TODO should return new game state for learning
-        # this will involve cloning current and next as well
-        
-        self.current.y += 1
-
-        if not (valid_space(self.current, self.grid)) and self.current.y > 0:
-            self.current.y -= 1
-            return True
-        return False
-    
     def do_action(self, action):
+        new_state = copy.deepcopy(self)
+        new_state.grid = create_grid(new_state.locked)
 
         if action == self.LEFT:
-            self.current.x -= 1
-            if not valid_space(self.current, self.grid):
-                self.current.x += 1
+            new_state.current.x -= 1
+            if not valid_space(new_state.current, new_state.grid):
+                new_state.current.x += 1
         elif action == self.RIGHT:
-            self.current.x += 1
-            if not valid_space(self.current, self.grid):
-                self.current.x -= 1
+            new_state.current.x += 1
+            if not valid_space(new_state.current, new_state.grid):
+                new_state.current.x -= 1
         elif action == self.ROTATE:
-            self.current.rotation = self.current.rotation + 1 % len(self.current.shape)
-            if not valid_space(self.current, self.grid):
-                self.current.rotation = self.current.rotation - 1 % len(self.current.shape)
+            new_state.current.rotation = new_state.current.rotation + 1 % len(new_state.current.shape)
+            if not valid_space(new_state.current, new_state.grid):
+                new_state.current.rotation = new_state.current.rotation - 1 % len(new_state.current.shape)
         elif action == self.DOWN:
-            self.current.y += 1
-            if not valid_space(self.current, self.grid):
-                self.current.y -= 1
+            new_state.current.y += 1
+                
+            # if hit bottom, change piece
+            if not valid_space(new_state.current, new_state.grid):
+                new_state.current.y -= 1
+                new_state.locked = lock_shape(new_state.locked, new_state.current)
+                new_state.locked = clear_rows(new_state.grid, new_state.locked)
+                new_state.grid = create_grid(new_state.locked)
+                
+                new_state.current = new_state.next
+                new_state.next = get_random_shape()
 
-        return GameState(self.locked, self.current, self.next)
+        if check_lost(new_state.locked):
+            new_state.lost = True
+
+        return new_state
 
 
 def create_grid(locked_positions={}):
@@ -260,26 +261,30 @@ def draw_grid(surface, row, col):
 
 
 def clear_rows(grid, locked):
-    # need to see if row is clear the shift every other row above down one
+    new_locked = {}
+    locked_i = len(grid)-1
 
-    inc = 0
     for i in range(len(grid)-1,-1,-1):
         row = grid[i]
-        if (0, 0, 0) not in row:
-            inc += 1
-            # add positions to remove from locked
-            ind = i
+        all_locked = True
+        for j in range(len(row)):
+            if (j, i) not in locked:
+                all_locked = False
+
+        if not all_locked:
             for j in range(len(row)):
-                try:
-                    del locked[(j, i)]
-                except:
-                    continue
-    if inc > 0:
-        for key in sorted(list(locked), key=lambda x: x[1])[::-1]:
-            x, y = key
-            if y < ind:
-                newKey = (x, y + inc)
-                locked[newKey] = locked.pop(key)
+                if (j, i) in locked:
+                    new_locked[(j, locked_i)] = locked[(j, i)]
+            locked_i -= 1
+
+    return new_locked
+
+def lock_shape(locked, piece):
+    shape_pos = convert_shape_format(piece)
+    for pos in shape_pos:
+        p = (pos[0], pos[1])
+        locked[p] = piece.color
+    return locked
 
 
 def draw_next_shape(shape, surface):
@@ -314,7 +319,6 @@ def draw_window(surface, grid):
     # draw grid and border
     draw_grid(surface, 20, 10)
     pygame.draw.rect(surface, (255, 0, 0), (top_left_x, top_left_y, play_width, play_height), 5)
-    # pygame.display.update()
 
 def main():
     state = GameState(
@@ -323,7 +327,6 @@ def main():
         next_piece = get_random_shape()
     )
 
-    change_piece = False
     run = True
 
     clock = pygame.time.Clock()
@@ -337,7 +340,7 @@ def main():
         # PIECE FALLING CODE
         if fall_time/1000 >= fall_speed:
             fall_time = 0
-            change_piece = state.advance()
+            state = state.do_action(GameState.DOWN)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -355,35 +358,22 @@ def main():
                 elif event.key == pygame.K_DOWN:
                     state = state.do_action(GameState.DOWN)
 
+        grid = state.grid
+
         shape_pos = convert_shape_format(state.current)
 
-        grid = create_grid(state.locked)
-
-        # add piece to the grid for drawing
+        # add current piece to the grid for drawing
         for i in range(len(shape_pos)):
             x, y = shape_pos[i]
             if y > -1:
                 grid[y][x] = state.current.color
-
-        # IF PIECE HIT GROUND
-        if change_piece:
-            for pos in shape_pos:
-                p = (pos[0], pos[1])
-                state.locked[p] = state.current.color
-            state.current = state.next
-            state.next = get_random_shape()
-            change_piece = False
-
-            # call four times to check for multiple clear rows
-            # TODO try this ^ and confirm it works?
-            clear_rows(grid, state.locked)
 
         draw_window(win, grid)
         draw_next_shape(state.next, win)
         pygame.display.update()
 
         # Check if user lost
-        if check_lost(state.locked):
+        if state.lost:
             run = False
 
     draw_text_middle("You Lost", 40, (255,255,255), win)
