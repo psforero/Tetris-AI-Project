@@ -208,17 +208,18 @@ class GameState:
 
     def result(self):
         result_state = copy.deepcopy(self)
-        result_state.grid = create_grid(result_state.locked)
-        result_state.current.color = GRAY
-        while valid_space(result_state.current, result_state.grid):
-            result_state.current.y += 1
+        result_piece = self.get_result_piece(result_state)
 
-        result_state.current.y -= 1
-        result_state.locked = lock_shape(result_state.locked, result_state.current)
-        result_state.grid = create_grid(result_state.locked)
+        result_state.locked = lock_shape(result_state.locked, result_piece)
+        shape_pos = convert_shape_format(result_piece)
+
+        # add piece's resulting position to the grid for drawing
+        for i in range(len(shape_pos)):
+            x, y = shape_pos[i]
+            if y > -1:
+                result_state.grid[y][x] = result_piece.color
 
         return result_state
-
 
     def hit_bottom(self, new_state):
         new_state.current.y -= 1
@@ -227,6 +228,16 @@ class GameState:
         new_state.grid = create_grid(new_state.locked)
         new_state.current = new_state.next
         new_state.next = get_shape()
+
+    def get_result_piece(self, result_state):
+        result_piece = copy.deepcopy(self.current)
+        result_piece.color = GRAY
+
+        while valid_space(result_piece, result_state.grid):
+            result_piece.y += 1
+        result_piece.y -= 1
+
+        return result_piece
 
 
 def create_grid(locked_positions={}):
@@ -314,40 +325,148 @@ def clear_rows(grid, locked):
 """
 
 
-def get_eval_score():
-    return landing_height() + eroded() + row_transitions() + col_transitions() + holes() + cum_wells() + hole_depth() + row_holes()
+def get_eval_score(state):
+    score = [landing_height(state),
+             eroded(state),
+             row_transitions(state),
+             col_transitions(state),
+             holes(state),
+             well_depth(state),
+             hole_depth(state),
+             row_holes(state)]
+
+    return score
 
 
-def landing_height():
-    return 1
+def landing_height(state):  # changed to resulting height
+    j = state.get_result_piece(state).x
+    height = 0
+    for i in range(len(state.grid), -1, -1):
+        if (j, i) in state.locked:
+            height = i
+
+    return ROWS - height
 
 
-def eroded():
-    return 1
+def eroded(state):  # missing * "contribution per piece"
+    lines_cleared = 0
+
+    for i in range(len(state.grid) - 1, -1, -1):
+        row = state.grid[i]
+        all_locked = True
+        for j in range(len(row)):
+            if (j, i) not in state.locked:
+                all_locked = False
+
+        if all_locked:
+            lines_cleared += 1
+
+    return lines_cleared
 
 
-def row_transitions():
-    return 1
+def row_transitions(state): # first col not counted?
+    transitions = 0
+
+    for i in range(len(state.grid) - 1, -1, -1):
+        row = state.grid[i]
+
+        for j in range(len(row) - 1):
+            if (((j, i) in state.locked and (j + 1, i) not in state.locked) or
+                    ((j, i) not in state.locked and (j + 1, i) in state.locked)):
+                transitions += 1
+
+    return transitions
 
 
-def col_transitions():
-    return 1
+def col_transitions(state):
+    transitions = 0
+
+    for j in range(len(state.grid[0])):
+        for i in range(len(state.grid) - 1, -1, -1):
+            if (((j, i) in state.locked and (j, i - 1) not in state.locked) or
+                    ((j, i) not in state.locked and (j, i - 1) in state.locked)):
+                transitions += 1
+
+    return transitions
 
 
-def holes():
-    return 1
+def holes(state):
+    holes = 0
+
+    for i in range(len(state.grid) - 1, -1, -1):
+        row = state.grid[i]
+        for j in range(len(row)):
+            if (j, i) not in state.locked:
+                for c in range(i - 1, -1, -1):
+                    if (j, c) in state.locked:
+                        holes += 1
+                        break
+    return holes
 
 
-def cum_wells():
-    return 1
+def well_depth(state):
+    heights = [0 for i in range(COLS)]
+
+    for j in range(len(state.grid[0])):
+        for i in range(len(state.grid) - 1, 0, -1):
+            if (j, i) in state.locked or i == 0:
+                heights[j] = ROWS-i
+
+    wells = [0 for i in range(COLS)]
+    for i in range(len(heights)):
+        difference = 0
+        if i == 0:
+            if heights[i+1] > heights[i]:
+                difference = heights[i+1] - heights[i]
+        elif i == COLS-1:
+            if heights[i-1] > heights[i]:
+                difference = heights[i-1] - heights[i]
+        else:
+            if heights[i-1] > heights[i] and heights[i+1] > heights[i]:
+                difference = min(heights[i+1] - heights[i], heights[i-1] - heights[i])
+        wells[i] = difference
+
+    for w in range(len(wells)):
+        total = 0
+        for val in range(wells[w] + 1):
+            total += val
+        wells[w] = total
+
+    return sum(wells)
 
 
-def hole_depth():
-    return 1
+def hole_depth(state):
+    cumulative_holes = 0
+
+    for j in range(len(state.grid[0])):
+        for i in range(len(state.grid) - 1, -1, -1):
+            if (j, i) not in state.locked:
+                depth = 0
+                for c in range(i - 1, -1, -1):
+                    if (j, c) in state.locked:
+                        depth += 1
+                    else:
+                        cumulative_holes += depth
+                        break
+
+    return cumulative_holes
 
 
-def row_holes():
-    return 1
+def row_holes(state):
+    row_holes = 0
+
+    for i in range(len(state.grid) - 1, -1, -1):
+        row = state.grid[i]
+        row_found = False
+        for j in range(len(row)):
+            if (j, i) not in state.locked:
+                for c in range(i - 1, -1, -1):
+                    if (j, c) in state.locked and not row_found:
+                        row_holes += 1
+                        row_found = True
+                        break
+
+    return row_holes
 
 
 """
@@ -391,6 +510,29 @@ def draw_next_shape(piece, surface):
     surface.blit(label, (sx + 10, sy - 30))
 
 
+def draw_eval_score(score, surface):
+    score_labels = ["landing h (l): ",
+                    "erosion (e): ",
+                    "row trans (delta r): ",
+                    "col trans (delta c): ",
+                    "holes (L): ",
+                    "wells (W)",
+                    "hole depth (D)",
+                    "row holes (R)"]
+
+    font = pygame.font.SysFont('comicsans', 30)
+    label = font.render('COST FUNCTION', True, WHITE)
+
+    sx = 10
+    sy = TOP_LEFT_Y
+    surface.blit(label, (sx + 10, sy - 30))
+
+    for i in range(len(score_labels)):
+        sy += 25
+        label = font.render(score_labels[i] + str(score[i]), True, WHITE)
+        surface.blit(label, (sx + 10, sy - 30))
+
+
 def draw_window(surface, grid):
     surface.fill(BLACK)
 
@@ -416,7 +558,7 @@ def main():
     fall_time = 0
 
     while not state.lost:
-        fall_speed = 0.27
+        fall_speed = 0.5  # 0.27
         fall_time += clock.get_rawtime()
         clock.tick()
 
@@ -424,7 +566,7 @@ def main():
         if fall_time / 1000 >= fall_speed:
             fall_time = 0
 
-            state = state.do_action(GameState.DOWN)
+            # state = state.do_action(GameState.DOWN)
 
         # EVENTS - PLAYER INPUT
         for event in pygame.event.get():
@@ -441,10 +583,10 @@ def main():
                     state = state.do_action(GameState.DOWN)
                 elif event.key == pygame.K_UP:
                     state = state.do_action(GameState.ROTATE)
-
                 elif event.key == pygame.K_SPACE:
                     state = state.do_action(GameState.HARD_DROP)
 
+        """
         shape_pos = convert_shape_format(state.current)
 
         # add current piece to the grid for drawing
@@ -452,9 +594,22 @@ def main():
             x, y = shape_pos[i]
             if y > -1:
                 state.grid[y][x] = state.current.color
+        """
 
-        draw_window(win, state.grid)
+        shape_pos = convert_shape_format(state.current)
+
+        result = state.result()
+        score = get_eval_score(result)
+
+        # add current piece to the grid for drawing
+        for i in range(len(shape_pos)):
+            x, y = shape_pos[i]
+            if y > -1:
+                result.grid[y][x] = result.current.color
+
+        draw_window(win, result.grid)
         draw_next_shape(state.next, win)
+        draw_eval_score(score, win)
         pygame.display.update()
 
     draw_text_middle("You Lost", 40, WHITE, win)
