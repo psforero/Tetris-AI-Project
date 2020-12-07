@@ -558,7 +558,7 @@ def main():
     fall_time = 0
 
     while not state.lost:
-        fall_speed = 0.5  # 0.27
+        fall_speed = 0.27
         fall_time += clock.get_rawtime()
         clock.tick()
 
@@ -566,7 +566,7 @@ def main():
         if fall_time / 1000 >= fall_speed:
             fall_time = 0
 
-            # state = state.do_action(GameState.DOWN)
+            state = state.do_action(GameState.DOWN)
 
         # EVENTS - PLAYER INPUT
         for event in pygame.event.get():
@@ -585,16 +585,6 @@ def main():
                     state = state.do_action(GameState.ROTATE)
                 elif event.key == pygame.K_SPACE:
                     state = state.do_action(GameState.HARD_DROP)
-
-        """
-        shape_pos = convert_shape_format(state.current)
-
-        # add current piece to the grid for drawing
-        for i in range(len(shape_pos)):
-            x, y = shape_pos[i]
-            if y > -1:
-                state.grid[y][x] = state.current.color
-        """
 
         shape_pos = convert_shape_format(state.current)
 
