@@ -171,6 +171,7 @@ class GameState:
         self.next = get_shape()
         self.grid = create_grid(self.locked)
         self.lost = False
+        self.score = 0
 
     def do_action(self, action):
         new_state = copy.deepcopy(self)
@@ -224,10 +225,28 @@ class GameState:
     def hit_bottom(self, new_state):
         new_state.current.y -= 1
         new_state.locked = lock_shape(new_state.locked, new_state.current)
-        new_state.locked = clear_rows(new_state.grid, new_state.locked)
+        new_state.locked, cleared_lines = clear_rows(new_state.grid, new_state.locked)
+        new_state.update_score(cleared_lines)
         new_state.grid = create_grid(new_state.locked)
         new_state.current = new_state.next
         new_state.next = get_shape()
+
+    def update_score(self, cleared_lines):
+        if cleared_lines == 4:
+            # 800 points for a tetris
+            self.score += 800
+        elif cleared_lines == 3:
+            self.score += 500
+        elif cleared_lines == 2:
+            self.score += 300
+        elif cleared_lines == 1:
+            self.score += 100
+        elif cleared_lines == 0:
+            # no points for no cleared lines
+            self.score = self.score
+        else:
+            # shouldn't be able to clear more than 4 lines at a time or less than 0
+            print('scoring error!')
 
     def get_result_piece(self, result_state):
         result_piece = copy.deepcopy(self.current)
@@ -303,6 +322,7 @@ def check_lost(positions):
 def clear_rows(grid, locked):
     new_locked = {}
     locked_i = len(grid) - 1
+    cleared_lines = 0
 
     for i in range(len(grid) - 1, -1, -1):
         row = grid[i]
@@ -316,8 +336,10 @@ def clear_rows(grid, locked):
                 if (j, i) in locked:
                     new_locked[(j, locked_i)] = locked[(j, i)]
             locked_i -= 1
+        else:
+            cleared_lines += 1
 
-    return new_locked
+    return new_locked, cleared_lines
 
 
 """
@@ -364,7 +386,7 @@ def eroded(state):  # missing * "contribution per piece"
     return lines_cleared
 
 
-def row_transitions(state): # first col not counted?
+def row_transitions(state):  # first col not counted?
     transitions = 0
 
     for i in range(len(state.grid) - 1, -1, -1):
@@ -410,20 +432,20 @@ def well_depth(state):
     for j in range(len(state.grid[0])):
         for i in range(len(state.grid) - 1, 0, -1):
             if (j, i) in state.locked or i == 0:
-                heights[j] = ROWS-i
+                heights[j] = ROWS - i
 
     wells = [0 for i in range(COLS)]
     for i in range(len(heights)):
         difference = 0
         if i == 0:
-            if heights[i+1] > heights[i]:
-                difference = heights[i+1] - heights[i]
-        elif i == COLS-1:
-            if heights[i-1] > heights[i]:
-                difference = heights[i-1] - heights[i]
+            if heights[i + 1] > heights[i]:
+                difference = heights[i + 1] - heights[i]
+        elif i == COLS - 1:
+            if heights[i - 1] > heights[i]:
+                difference = heights[i - 1] - heights[i]
         else:
-            if heights[i-1] > heights[i] and heights[i+1] > heights[i]:
-                difference = min(heights[i+1] - heights[i], heights[i-1] - heights[i])
+            if heights[i - 1] > heights[i] and heights[i + 1] > heights[i]:
+                difference = min(heights[i + 1] - heights[i], heights[i - 1] - heights[i])
         wells[i] = difference
 
     for w in range(len(wells)):
@@ -533,6 +555,15 @@ def draw_eval_score(score, surface):
         surface.blit(label, (sx + 10, sy - 30))
 
 
+def draw_score(surface, score):
+    # display current score
+    font = pygame.font.SysFont('comicsans', 30)
+    label = font.render('Score: ' + str(score), True, (255, 255, 255))
+    sx = TOP_LEFT_X + PLAY_WIDTH + 50
+    sy = TOP_LEFT_Y + PLAY_HEIGHT / 2 - 100
+    surface.blit(label, (sx + 20, sy + 160))
+
+
 def draw_window(surface, grid):
     surface.fill(BLACK)
 
@@ -599,6 +630,7 @@ def main():
 
         draw_window(win, result.grid)
         draw_next_shape(state.next, win)
+        draw_score(win, state.score)
         draw_eval_score(score, win)
         pygame.display.update()
 
