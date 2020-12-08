@@ -34,8 +34,28 @@ pip install whatever
 pip freeze > requirements.txt
 ```
 
-## Run it
+## Running it
+
+To play as a human:
 
 ```
 python GUI.py
+```
+
+To train one of the AI agents:
+
+```
+python GUI.py --agent <agentname> --outfile <filename>
+```
+
+Use `--trials` to change the number of training iterations
+
+```
+python GUI.py --agent <agentname> --outfile <filename> --trials 5
+```
+
+To run as a pretrained agent:
+
+```
+python GUI.py --agent <agentname> --infile <filename>
 ```

@@ -1,6 +1,15 @@
+import sys
 import pygame
 import random
 import copy
+import agents
+import argparse
+import pickle
+
+from agents import (
+    HumanAgent,
+    NaiveAgent,
+)
 
 """
 10 x 20 square grid
@@ -490,9 +499,8 @@ def row_holes(state):
 
     return row_holes
 
-
 """
-///////////// DRAWING FUNCTIONS ////////////////
+///////////// DRAWING FUNCTIONS /////////////
 """
 
 
@@ -583,39 +591,32 @@ def draw_window(surface, grid):
     pygame.draw.rect(surface, GRAY, (TOP_LEFT_X, TOP_LEFT_Y, PLAY_WIDTH, PLAY_HEIGHT), 5)
 
 
-def main():
+def main(agent):
     state = GameState()
     clock = pygame.time.Clock()
     fall_time = 0
+    max_actions = 3
+    actions_taken = 0
 
     while not state.lost:
         fall_speed = 0.27
         fall_time += clock.get_rawtime()
         clock.tick()
 
+        if pygame.event.peek(pygame.QUIT):
+            pygame.display.quit()
+            quit()
+
         # PIECE FALLING CODE
         if fall_time / 1000 >= fall_speed:
             fall_time = 0
-
             state = state.do_action(GameState.DOWN)
-
-        # EVENTS - PLAYER INPUT
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.display.quit()
-                quit()
-
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_LEFT:
-                    state = state.do_action(GameState.LEFT)
-                elif event.key == pygame.K_RIGHT:
-                    state = state.do_action(GameState.RIGHT)
-                elif event.key == pygame.K_DOWN:
-                    state = state.do_action(GameState.DOWN)
-                elif event.key == pygame.K_UP:
-                    state = state.do_action(GameState.ROTATE)
-                elif event.key == pygame.K_SPACE:
-                    state = state.do_action(GameState.HARD_DROP)
+        
+        # EVENTS - AGENT MOVE
+        if fall_time / 200 >= fall_speed:
+            action = agent.move(state)
+            if action:
+                state = state.do_action(action)
 
         shape_pos = convert_shape_format(state.current)
 
@@ -640,6 +641,35 @@ def main():
 
 
 def main_menu():
+    valid_agents = {
+        'naive': NaiveAgent,
+        'human': HumanAgent,
+    }
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--agent', choices=valid_agents.keys(), default='human')
+    parser.add_argument('--trials', type=int, default=1000)
+    parser.add_argument('--infile', required=False, type=argparse.FileType('rb'))
+    parser.add_argument('--outfile', required=False, type=argparse.FileType('w+b'))
+    args = parser.parse_args()
+
+    agent = valid_agents[args.agent]()
+
+    if args.outfile:
+        print('Training ...')
+        print(args.trials)
+        for each in range(args.trials):
+            agent.train(GameState())
+        
+        if args.outfile:
+            data = agent.save()
+            pickle.dump(data, args.outfile)
+        sys.exit(0)
+    
+    if args.infile:
+        data = pickle.load(args.infile)
+        agent.load(data)
+
     run = True
     while run:
         win.fill((0, 0, 0))
@@ -650,9 +680,8 @@ def main_menu():
                 run = False
 
             if event.type == pygame.KEYDOWN:
-                main()
+                main(agent)
     pygame.quit()
-
 
 win = pygame.display.set_mode((S_WIDTH, S_HEIGHT))
 pygame.display.set_caption('Tetris')
