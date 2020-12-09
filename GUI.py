@@ -9,6 +9,7 @@ import pickle
 from agents import (
     HumanAgent,
     NaiveAgent,
+    NNAgent,
 )
 
 """
@@ -216,6 +217,9 @@ class GameState:
 
         return new_state
 
+    def get_eval_score(self):
+        return get_eval_score(self.result())
+
     def result(self):
         result_state = copy.deepcopy(self)
         result_piece = self.get_result_piece(result_state)
@@ -280,7 +284,7 @@ def create_grid(locked_positions={}):
 
 
 def get_shape():
-    return Piece(COLS // 2, 0, random.choice(SHAPES))
+    return Piece(COLS // 2, 2, random.choice(SHAPES))
 
 
 def lock_shape(locked, piece):
@@ -644,6 +648,7 @@ def main_menu():
     valid_agents = {
         'naive': NaiveAgent,
         'human': HumanAgent,
+        'neural': NNAgent,
     }
 
     parser = argparse.ArgumentParser()
