@@ -3,7 +3,11 @@ import torch
 from torch import nn
 from torch import optim
 import numpy as np
+from queue import Queue
 import copy
+
+COLS = 10
+ROWS = 20
 
 LEFT = 1
 RIGHT = 2
@@ -146,33 +150,57 @@ e = 2.0
 r_t = -1.0
 c_t = -1.0
 h_t = -4.0
-w = -1.0
+w = -1.4
 h_d = -1.0
-r_h = -1.0
+r_h = -1.5
 
 
 class HandTunedAgent:
+    def __init__(self):
+        self.rotations = 0
+        self.actions = Queue()
 
     def move(self, state):
-        action = self.search(state)
-        return action
+
+        if self.actions.empty():
+            self.search(state)
+            if self.actions.empty():
+                return DOWN
+            return self.actions.get()
 
     def search(self, state):
 
-        prev_state = copy.deepcopy(state)
         max_score = float('-inf')
-        action = None
+        rotations = 0
+        side_moves = 0
 
-        for rotation in range(len(state.current.shape)):
-            score = self.calculate_score(state.get_eval_score())
+        for side in range(6):
+            result = state.result()
+            score = self.calculate_score(result.get_eval_score())
+
             if score > max_score:
                 max_score = score
-                action = rotation
-            print(rotation, score)
+                side_moves = side
+                print(score, max_score, side_moves)
             state = state.do_action(ROTATE)
 
-        print("***", action, max_score)
-        return action
+        for i in range(side_moves):
+            self.actions.put(LEFT)
+
+
+        # for rotation in range(len(state.current.shape)):
+        #     result = state.result()
+        #     score = self.calculate_score(result.get_eval_score())
+        #
+        #     if score > max_score:
+        #         max_score = score
+        #         rotations = rotation
+        #         print(score, max_score, rots)
+        #     state = state.do_action(ROTATE)
+        #
+        # for i in range(rotations):
+        #     self.actions.put(ROTATE)
+
 
     def calculate_score(self, score):
         weights = [h, e, r_t, c_t, h_t, w, h_d, r_h]
