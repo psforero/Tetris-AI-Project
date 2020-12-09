@@ -3,7 +3,13 @@ import torch
 from torch import nn
 from torch import optim
 import numpy as np
+import copy
 
+LEFT = 1
+RIGHT = 2
+DOWN = 3
+ROTATE = 4
+HARD_DROP = 5
 
 S = [['.....',
       '.....',
@@ -132,6 +138,50 @@ class NaiveAgent:
     def load(self, data):
         print(data)
         self.weights = data
+
+
+# height, eroded, r trans, c trans, holes, wells, hole depth, row hole
+h = -1.0
+e = 2.0
+r_t = -1.0
+c_t = -1.0
+h_t = -4.0
+w = -1.0
+h_d = -1.0
+r_h = -1.0
+
+
+class HandTunedAgent:
+
+    def move(self, state):
+        action = self.search(state)
+        return action
+
+    def search(self, state):
+
+        prev_state = copy.deepcopy(state)
+        max_score = float('-inf')
+        action = None
+
+        for rotation in range(len(state.current.shape)):
+            score = self.calculate_score(state.get_eval_score())
+            if score > max_score:
+                max_score = score
+                action = rotation
+            print(rotation, score)
+            state = state.do_action(ROTATE)
+
+        print("***", action, max_score)
+        return action
+
+    def calculate_score(self, score):
+        weights = [h, e, r_t, c_t, h_t, w, h_d, r_h]
+        weighted_score = []
+
+        for f in range(len(score)):
+            weighted_score.append(score[f] * weights[f])
+
+        return sum(weighted_score)
 
 
 class NNAgent:

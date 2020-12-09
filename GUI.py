@@ -8,6 +8,7 @@ import pickle
 
 from agents import (
     HumanAgent,
+    HandTunedAgent,
     NaiveAgent,
     NNAgent,
 )
@@ -189,26 +190,26 @@ class GameState:
 
         if action == self.LEFT:
             new_state.current.x -= 1
-            if not valid_space(new_state.current, new_state.grid):
+            if not self.valid_space(new_state.current, new_state.grid):
                 new_state.current.x += 1
 
         elif action == self.RIGHT:
             new_state.current.x += 1
-            if not valid_space(new_state.current, new_state.grid):
+            if not self.valid_space(new_state.current, new_state.grid):
                 new_state.current.x -= 1
 
         elif action == self.ROTATE:
             new_state.current.rotation = new_state.current.rotation + 1 % len(new_state.current.shape)
-            if not valid_space(new_state.current, new_state.grid):
+            if not self.valid_space(new_state.current, new_state.grid):
                 new_state.current.rotation = new_state.current.rotation - 1 % len(new_state.current.shape)
 
         elif action == self.DOWN:
             new_state.current.y += 1
-            if not valid_space(new_state.current, new_state.grid):
+            if not self.valid_space(new_state.current, new_state.grid):
                 self.hit_bottom(new_state)
 
         elif action == self.HARD_DROP:
-            while valid_space(new_state.current, new_state.grid):
+            while self.valid_space(new_state.current, new_state.grid):
                 new_state.current.y += 1
             self.hit_bottom(new_state)
 
@@ -265,11 +266,23 @@ class GameState:
         result_piece = copy.deepcopy(self.current)
         result_piece.color = GRAY
 
-        while valid_space(result_piece, result_state.grid):
+        while self.valid_space(result_piece, result_state.grid):
             result_piece.y += 1
         result_piece.y -= 1
 
         return result_piece
+
+    def valid_space(self, shape, grid):
+        accepted_positions = [[(j, i) for j in range(COLS) if grid[i][j] == BLACK] for i in range(ROWS)]
+        accepted_positions = [j for sub in accepted_positions for j in sub]
+        formatted = convert_shape_format(shape)
+
+        for pos in formatted:
+            if pos not in accepted_positions:
+                if pos[1] > -1:
+                    return False
+
+        return True
 
 
 def create_grid(locked_positions={}):
@@ -309,19 +322,6 @@ def convert_shape_format(piece):
         positions[i] = (pos[0] - 2, pos[1] - 4)
 
     return positions
-
-
-def valid_space(shape, grid):
-    accepted_positions = [[(j, i) for j in range(COLS) if grid[i][j] == BLACK] for i in range(ROWS)]
-    accepted_positions = [j for sub in accepted_positions for j in sub]
-    formatted = convert_shape_format(shape)
-
-    for pos in formatted:
-        if pos not in accepted_positions:
-            if pos[1] > -1:
-                return False
-
-    return True
 
 
 def check_lost(positions):
@@ -603,7 +603,7 @@ def main(agent):
     actions_taken = 0
 
     while not state.lost:
-        fall_speed = 0.27
+        fall_speed = 0.6
         fall_time += clock.get_rawtime()
         clock.tick()
 
@@ -648,6 +648,7 @@ def main_menu():
     valid_agents = {
         'naive': NaiveAgent,
         'human': HumanAgent,
+        'hand': HandTunedAgent,
         'neural': NNAgent,
     }
 
