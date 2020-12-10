@@ -130,44 +130,43 @@ class NaiveAgent:
         while not state.lost:
             actions += 1
             state = state.do_action(state.DOWN)
-        
+
         self.weights.append(actions)
-        
+
     def move(self, state):
         return state.DOWN
-    
+
     def save(self):
         return self.weights
-    
+
     def load(self, data):
         print(data)
         self.weights = data
 
 
 # height, eroded, r trans, c trans, holes, wells, hole depth, row hole
-h = -3.0
-e = 6.0
-r_t = -2.0
-c_t = -1.0
-h_t = -5.0
-w = -2.0
-h_d = -2.0
-r_h = -1.5
+height = -1.8
+eroded = 8.0
+r_trans = -0.6
+c_trans = -0.6
+holes = -8.0
+wells = -1.5
+h_depth = -2.2
+r_hole = -0.8
 
 
 class HandTunedAgent:
     def __init__(self):
-        self.rotations = 0
         self.actions = Queue()
 
     def move(self, state):
 
-        self.search(state)
-
         if not self.actions.empty():
             return self.actions.get()
 
-        return HARD_DROP
+        self.search(state)
+
+        #return HARD_DROP
 
     def search(self, state):
 
@@ -176,7 +175,7 @@ class HandTunedAgent:
         max_score_left = self.get_score_after_moves(state_left, self.actions)
         rotations_left = 0
         moves_left = 0
-        for side in range(4):
+        for side in range(6):
             # Check rotation
             for rotation in range(len(state_left.current.shape)):
                 result = state_left.result()
@@ -188,7 +187,6 @@ class HandTunedAgent:
                     moves_left = side
 
                 state_left = state_left.do_action(ROTATE)
-
             state_left = state_left.do_action(LEFT)
 
         # Check right
@@ -207,8 +205,8 @@ class HandTunedAgent:
                     max_score_right = score
                     rotations_right = rotation
                     moves_right = side
-                state_right = state_right.do_action(ROTATE)
 
+                state_right = state_right.do_action(ROTATE)
             state_right = state_right.do_action(RIGHT)
 
         if max_score_left > max_score_right:
@@ -224,15 +222,16 @@ class HandTunedAgent:
             for i in range(moves_right):
                 self.actions.put(RIGHT)
 
+        self.actions.put(HARD_DROP)
+
     def get_score_after_moves(self, state, actions):
         for elem in list(actions.queue):
             state = state.do_action(elem)
         result = state.result()
         return self.calculate_score(result.get_eval_score())
 
-
     def calculate_score(self, score):
-        weights = [h, e, r_t, c_t, h_t, w, h_d, r_h]
+        weights = [height, eroded, r_trans, c_trans, holes, wells, h_depth, r_hole]
         weighted_score = []
 
         for f in range(len(score)):
@@ -245,14 +244,14 @@ class NNAgent:
     def __init__(self):
         self.n_inputs = 204
         self.n_outputs = 4
-        
+
         # Define network
         self.network = nn.Sequential(
-            nn.Linear(self.n_inputs, 64), 
+            nn.Linear(self.n_inputs, 64),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(64, 16), 
-            nn.ReLU(), 
+            nn.Linear(64, 16),
+            nn.ReLU(),
             nn.Linear(16, self.n_outputs),
             nn.Softmax(dim=-1))
 
@@ -261,13 +260,13 @@ class NNAgent:
         self.batch_actions = []
         self.batch_states = []
         self.batch_counter = 1
-    
+
         # Define optimizer
-        self.optimizer = optim.Adam(self.network.parameters(), 
+        self.optimizer = optim.Adam(self.network.parameters(),
                            lr=0.01)
-    
+
         self.action_space = np.arange(4)
-    
+
     def predict(self, state):
         action_probs = self.network(torch.FloatTensor(state))
         return action_probs
@@ -282,10 +281,10 @@ class NNAgent:
     def vectorize(self, state):
         # 10x20 grid + current piece
         nn_input = np.zeros(200 + 4)
-        
+
         for y, x in state.locked.keys():
             nn_input[10*y + x] = 1
-        
+
         nn_input[200] = state.current.x
         nn_input[201] = state.current.y
         nn_input[202] = SHAPES.index(state.current.shape)
@@ -315,11 +314,11 @@ class NNAgent:
             costs = state.get_eval_score()
 
             r = last_state.score - state.score - sum(costs)
-            
+
             states.append(self.vectorize(last_state))
             rewards.append(r)
             actions.append(action)
-            
+
             # If done, batch data
             if done:
                 self.batch_rewards.extend(self.discount_rewards(rewards, gamma))
@@ -327,7 +326,7 @@ class NNAgent:
                 self.batch_actions.extend(actions)
                 self.batch_counter += 1
                 self.total_rewards.append(sum(rewards))
-                
+
                 # If batch is complete, update network
                 if self.batch_counter == batch_size:
                     self.optimizer.zero_grad()
@@ -342,29 +341,29 @@ class NNAgent:
                     selected_logprobs = reward_tensor * torch.gather(logprob, 1, action_tensor).squeeze()
 
                     loss = -selected_logprobs.mean()
-                    
+
                     # Calculate gradients
                     loss.backward()
                     # Apply gradients
                     self.optimizer.step()
-                    
+
                     self.batch_rewards = []
                     self.batch_actions = []
                     self.batch_states = []
                     self.batch_counter = 1
-                    
+
                 avg_rewards = np.mean(self.total_rewards[-100:])
                 # Print running average
                 print("\rAverage of last 100: {:.2f}".format(avg_rewards), end="")
-                
+
     def move(self, state):
         outputs = self.predict(self.vectorize(state))
         # print(outputs)
         return torch.argmax(self.predict(self.vectorize(state))).detach() + 1
-    
+
     def save(self):
         return self.network.state_dict()
-    
+
     def load(self, data):
         self.network.load_state_dict(data)
         self.network.eval()

@@ -2,7 +2,6 @@ import sys
 import pygame
 import random
 import copy
-import agents
 import argparse
 import pickle
 
@@ -149,10 +148,9 @@ T = [['.....',
       '..0..',
       '.....']]
 
+# index 0 - 6 represent shape
 SHAPES = [S, Z, I, O, J, L, T]
 SHAPE_COLORS = [GREEN, RED, CYAN, YELLOW, ORANGE, BLUE, PURPLE]
-
-# index 0 - 6 represent shape
 
 
 """
@@ -183,6 +181,7 @@ class GameState:
         self.grid = create_grid(self.locked)
         self.lost = False
         self.score = 0
+        self.lines_cleared = 0
 
     def do_action(self, action):
         new_state = copy.deepcopy(self)
@@ -246,6 +245,8 @@ class GameState:
         new_state.next = get_shape()
 
     def update_score(self, cleared_lines):
+        self.lines_cleared += cleared_lines
+
         if cleared_lines == 4:
             # 800 points for a tetris
             self.score += 800
@@ -567,12 +568,16 @@ def draw_eval_score(score, surface):
         surface.blit(label, (sx + 10, sy - 30))
 
 
-def draw_score(surface, score):
+def draw_score(surface, score, lines):
     # display current score
     font = pygame.font.SysFont('comicsans', 30)
     label = font.render('Score: ' + str(score), True, (255, 255, 255))
     sx = TOP_LEFT_X + PLAY_WIDTH + 50
     sy = TOP_LEFT_Y + PLAY_HEIGHT / 2 - 100
+    surface.blit(label, (sx + 20, sy + 160))
+
+    label = font.render('Lines: ' + str(lines), True, (255, 255, 255))
+    sy += 50
     surface.blit(label, (sx + 20, sy + 160))
 
 
@@ -617,13 +622,13 @@ def main(agent):
             state = state.do_action(GameState.DOWN)
         
         # EVENTS - AGENT MOVE
-        # if fall_time / 200 >= fall_speed:
-        #     action = agent.move(state)
-        #     if action:
-        #         state = state.do_action(action)
+        if fall_time / 200 >= fall_speed:
+            action = agent.move(state)
+            if action:
+                state = state.do_action(action)
 
-        action = agent.move(state)
-        state = state.do_action(action)
+        # action = agent.move(state)
+        # state = state.do_action(action)
 
         shape_pos = convert_shape_format(state.current)
 
@@ -638,7 +643,7 @@ def main(agent):
 
         draw_window(win, result.grid)
         draw_next_shape(state.next, win)
-        draw_score(win, state.score)
+        draw_score(win, state.score, state.lines_cleared)
         draw_eval_score(score, win)
         pygame.display.update()
 
