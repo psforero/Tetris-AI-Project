@@ -183,6 +183,7 @@ class GameState:
         self.grid = create_grid(self.locked)
         self.lost = False
         self.score = 0
+        self.piece_num = 1
 
     def do_action(self, action):
         new_state = copy.deepcopy(self)
@@ -244,6 +245,7 @@ class GameState:
         new_state.grid = create_grid(new_state.locked)
         new_state.current = new_state.next
         new_state.next = get_shape()
+        new_state.piece_num += 1
 
     def update_score(self, cleared_lines):
         if cleared_lines == 4:
