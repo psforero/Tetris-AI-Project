@@ -619,10 +619,13 @@ def main(agent):
             state = state.do_action(GameState.DOWN)
         
         # EVENTS - AGENT MOVE
-        if fall_time / 200 >= fall_speed:
-            action = agent.move(state)
-            if action:
-                state = state.do_action(action)
+        # if fall_time / 200 >= fall_speed:
+        #     action = agent.move(state)
+        #     if action:
+        #         state = state.do_action(action)
+
+        action = agent.move(state)
+        state = state.do_action(action)
 
         shape_pos = convert_shape_format(state.current)
 
