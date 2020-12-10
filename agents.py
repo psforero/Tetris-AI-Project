@@ -145,12 +145,12 @@ class NaiveAgent:
 
 
 # height, eroded, r trans, c trans, holes, wells, hole depth, row hole
-h = -1.0
-e = 2.0
+h = -3.0
+e = 4.0
 r_t = -1.0
 c_t = -1.0
-h_t = -4.0
-w = -1.4
+h_t = -5.0
+w = -3.0
 h_d = -1.0
 r_h = -1.5
 
@@ -162,44 +162,73 @@ class HandTunedAgent:
 
     def move(self, state):
 
-        if self.actions.empty():
-            self.search(state)
-            if self.actions.empty():
-                return DOWN
+        self.search(state)
+
+        if not self.actions.empty():
             return self.actions.get()
+
+        return HARD_DROP
 
     def search(self, state):
 
-        max_score = float('-inf')
-        rotations = 0
-        side_moves = 0
+        # Check left
+        state_left = copy.deepcopy(state)
+        max_score_left = self.get_score_after_moves(state_left, self.actions)
+        rotations_left = 0
+        moves_left = 0
+        for side in range(4):
+            # Check rotation
+            for rotation in range(len(state_left.current.shape)):
+                result = state_left.result()
+                score = self.calculate_score(result.get_eval_score())
 
-        for side in range(6):
-            result = state.result()
-            score = self.calculate_score(result.get_eval_score())
+                if score > max_score_left:
+                    max_score_left = score
+                    rotations_left = rotation
+                    moves_left = side
 
-            if score > max_score:
-                max_score = score
-                side_moves = side
-                print(score, max_score, side_moves)
-            state = state.do_action(ROTATE)
+                state_left = state_left.do_action(ROTATE)
 
-        for i in range(side_moves):
-            self.actions.put(LEFT)
+            state_left = state_left.do_action(LEFT)
 
+        # Check right
+        state_right = copy.deepcopy(state)
+        max_score_right = self.get_score_after_moves(state_right, self.actions)
+        rotations_right = 0
+        moves_right = 0
 
-        # for rotation in range(len(state.current.shape)):
-        #     result = state.result()
-        #     score = self.calculate_score(result.get_eval_score())
-        #
-        #     if score > max_score:
-        #         max_score = score
-        #         rotations = rotation
-        #         print(score, max_score, rots)
-        #     state = state.do_action(ROTATE)
-        #
-        # for i in range(rotations):
-        #     self.actions.put(ROTATE)
+        for side in range(5):
+            # Check rotation
+            for rotation in range(len(state_right.current.shape)):
+                result = state_right.result()
+                score = self.calculate_score(result.get_eval_score())
+
+                if score > max_score_right:
+                    max_score_right = score
+                    rotations_right = rotation
+                    moves_right = side
+                state_right = state_right.do_action(ROTATE)
+
+            state_right = state_right.do_action(RIGHT)
+
+        if max_score_left > max_score_right:
+            for i in range(rotations_left):
+                self.actions.put(ROTATE)
+
+            for i in range(moves_left):
+                self.actions.put(LEFT)
+        else:
+            for i in range(rotations_right):
+                self.actions.put(ROTATE)
+
+            for i in range(moves_right):
+                self.actions.put(RIGHT)
+
+    def get_score_after_moves(self, state, actions):
+        for elem in list(actions.queue):
+            state = state.do_action(elem)
+        result = state.result()
+        return self.calculate_score(result.get_eval_score())
 
 
     def calculate_score(self, score):
