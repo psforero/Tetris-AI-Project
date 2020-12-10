@@ -146,12 +146,12 @@ class NaiveAgent:
 
 # height, eroded, r trans, c trans, holes, wells, hole depth, row hole
 h = -3.0
-e = 4.0
-r_t = -1.0
+e = 6.0
+r_t = -2.0
 c_t = -1.0
 h_t = -5.0
-w = -3.0
-h_d = -1.0
+w = -2.0
+h_d = -2.0
 r_h = -1.5
 
 
