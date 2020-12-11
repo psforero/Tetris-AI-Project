@@ -1,6 +1,15 @@
 # Tetris-AI-Project
 AI agent that plays Tetris. Divided into three main parts: the game logic and GUI, the implementation of the feature set and cost function, and the actual agent.
 
+CS5100 - Foundations of AI, Fall 2020
+
+Students:
+- Lindsay Coffin
+- Pablo Gomez Forero
+- Justin Ullman
+
+Attribution: initial code for GUI implementation modified from https://www.youtube.com/watch?v=uoR4ilCWwKA
+
 ## Initial Setup
 
 This repo uses python 3's virtualenvs. See the [documentation](https://docs.python.org/3/tutorial/venv.html).
@@ -66,7 +75,7 @@ Use `--trials` to change the number of training iterations
 python GUI.py --agent <agentname> --outfile <filename> --trials 5
 ```
 
-Use `--games` to change the number of games played
+Use `--games` to change the number of games played sequentially
 
 ```
 python GUI.py --agent <agentname> --games 50
