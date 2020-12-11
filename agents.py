@@ -1,3 +1,11 @@
+# CS5100 - Foundations of AI
+# Fall 2020
+# Students:
+#   Lindsay Coffin
+#   Pablo Gomez Forero
+#   Justin Ullman
+
+
 import pygame  # only for the human agent
 import torch
 from torch import nn

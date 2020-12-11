@@ -1,3 +1,13 @@
+# CS5100 - Foundations of AI
+# Fall 2020
+# Students:
+#   Lindsay Coffin
+#   Pablo Gomez Forero
+#   Justin Ullman
+#
+# Attribution: initial code for GUI implementation modified from https://www.youtube.com/watch?v=uoR4ilCWwKA
+
+
 import sys
 import pygame
 import random
@@ -18,7 +28,6 @@ from agents import (
 shapes: S, Z, I, O, J, L, T
 represented in order by 0 - 6
 """
-
 pygame.font.init()
 
 # GLOBALS VARS
@@ -159,6 +168,9 @@ SHAPE_COLORS = [GREEN, RED, CYAN, YELLOW, ORANGE, BLUE, PURPLE]
 
 
 class Piece(object):
+    """
+    Represents the state of each tetromino
+    """
     def __init__(self, column, row, shape):
         self.x = column
         self.y = row
@@ -167,6 +179,9 @@ class Piece(object):
         self.rotation = 0  # number from 0-3
 
     def get_height(self):
+        """
+        Returns the height of a piece, used by the cost function
+        """
         if self.shape == 3: # O
             return 2
         if self.shape == 0 or self.shape == 1: # S Z
@@ -183,9 +198,19 @@ class Piece(object):
         return 3
 
 
-
-
 class GameState:
+    """
+    Represents the state of a game
+    locked: cells in the grid that are occupied
+    current: current tetromino
+    next: tetromino falling in the next turn
+    grid: occupancy grid
+    lost: current game state
+    score: current score
+    lines_cleared: current lines cleared
+    """
+
+    # moves
     LEFT = 1
     RIGHT = 2
     DOWN = 3
@@ -203,6 +228,9 @@ class GameState:
         self.lines_cleared = 0
 
     def do_action(self, action):
+        """
+        Applies an action to the current state and returns the resulting state
+        """
         new_state = copy.deepcopy(self)
         new_state.grid = create_grid(new_state.locked)
 
@@ -237,9 +265,15 @@ class GameState:
         return new_state
 
     def get_eval_score(self):
+        """
+        Calculates and returns the score for a resulting position based on the feature set
+        """
         return get_eval_score(self.result())
 
     def result(self):
+        """
+        Returns the resulting state if the current piece was to fall in its current path
+        """
         result_state = copy.deepcopy(self)
         result_piece = self.get_result_piece(result_state)
 
@@ -254,7 +288,23 @@ class GameState:
 
         return result_state
 
+    def get_result_piece(self, result_state):
+        """
+        Returns the piece that would result if the current piece hit the bottom
+        """
+        result_piece = copy.deepcopy(self.current)
+        result_piece.color = GRAY
+
+        while self.valid_space(result_piece, result_state.grid):
+            result_piece.y += 1
+        result_piece.y -= 1
+
+        return result_piece
+
     def hit_bottom(self, new_state):
+        """
+        Checks if a piece has hit the bottom of the grid
+        """
         new_state.current.y -= 1
         new_state.locked = lock_shape(new_state.locked, new_state.current)
         new_state.locked, cleared_lines = clear_rows(new_state.grid, new_state.locked)
@@ -265,6 +315,9 @@ class GameState:
         new_state.piece_num += 1
 
     def update_score(self, cleared_lines):
+        """
+        Updates score and lines cleared when lines are cleared
+        """
         self.lines_cleared += cleared_lines
 
         if cleared_lines == 4:
@@ -283,17 +336,10 @@ class GameState:
             # shouldn't be able to clear more than 4 lines at a time or less than 0
             print('scoring error!')
 
-    def get_result_piece(self, result_state):
-        result_piece = copy.deepcopy(self.current)
-        result_piece.color = GRAY
-
-        while self.valid_space(result_piece, result_state.grid):
-            result_piece.y += 1
-        result_piece.y -= 1
-
-        return result_piece
-
     def valid_space(self, shape, grid):
+        """
+        Checks if the current position is valid (inside the grid and not occupied)
+        """
         accepted_positions = [[(j, i) for j in range(COLS) if grid[i][j] == BLACK] for i in range(ROWS)]
         accepted_positions = [j for sub in accepted_positions for j in sub]
         formatted = convert_shape_format(shape)
@@ -307,6 +353,9 @@ class GameState:
 
 
 def create_grid(locked_positions={}):
+    """
+    Returns an occupancy grid after including occupied (locked) positions
+    """
     grid = [[BLACK for col in range(COLS)] for row in range(ROWS)]
 
     for i in range(len(grid)):
@@ -318,10 +367,16 @@ def create_grid(locked_positions={}):
 
 
 def get_shape():
+    """
+    Returns a random tetromino
+    """
     return Piece(COLS // 2, 2, random.choice(SHAPES))
 
 
 def lock_shape(locked, piece):
+    """
+    Updates the locked/occupied cells for a piece
+    """
     shape_pos = convert_shape_format(piece)
     for pos in shape_pos:
         p = (pos[0], pos[1])
@@ -330,6 +385,9 @@ def lock_shape(locked, piece):
 
 
 def convert_shape_format(piece):
+    """
+    Used for rotations and to set the piece in the appropriate grid space
+    """
     positions = []
     format = piece.shape[piece.rotation % len(piece.shape)]
 
@@ -346,6 +404,9 @@ def convert_shape_format(piece):
 
 
 def check_lost(positions):
+    """
+    Checks if the player has lost
+    """
     for pos in positions:
         x, y = pos
         if y < 1:
@@ -354,6 +415,9 @@ def check_lost(positions):
 
 
 def clear_rows(grid, locked):
+    """
+    Checks occupied cells and clears any filled lines
+    """
     new_locked = {}
     locked_i = len(grid) - 1
     cleared_lines = 0
@@ -382,6 +446,9 @@ def clear_rows(grid, locked):
 
 
 def get_eval_score(state):
+    """
+    Calculates the score of each feature
+    """
     score = [landing_height(state),
              eroded(state),
              row_transitions(state),
@@ -394,7 +461,10 @@ def get_eval_score(state):
     return score
 
 
-def landing_height(state):  # changed to resulting height
+def landing_height(state):
+    """
+    Returns landing height of the current piece
+    """
     piece = state.get_result_piece(state)
     j = piece.x
     height = 0
@@ -405,7 +475,10 @@ def landing_height(state):  # changed to resulting height
     return (ROWS - height) - piece.get_height()
 
 
-def eroded(state):  # missing * "contribution per piece"
+def eroded(state):
+    """
+    Returns cleared lines
+    """
     lines_cleared = 0
 
     for i in range(len(state.grid) - 1, -1, -1):
@@ -421,7 +494,10 @@ def eroded(state):  # missing * "contribution per piece"
     return lines_cleared
 
 
-def row_transitions(state):  # first col not counted?
+def row_transitions(state):
+    """
+    Returns number of transitions (hole, filled, hole) in a row
+    """
     transitions = 0
 
     for i in range(len(state.grid) - 1, -1, -1):
@@ -436,6 +512,9 @@ def row_transitions(state):  # first col not counted?
 
 
 def col_transitions(state):
+    """
+    Returns number of transitions (hole, filled, hole) in a column
+    """
     transitions = 0
 
     for j in range(len(state.grid[0])):
@@ -448,6 +527,9 @@ def col_transitions(state):
 
 
 def holes(state):
+    """
+    Returns number of unoccupied cells with occupied cells above
+    """
     holes = 0
 
     for i in range(len(state.grid) - 1, -1, -1):
@@ -462,6 +544,9 @@ def holes(state):
 
 
 def well_depth(state):
+    """
+    Returns cumulative empty cells in a column whose adjacent columns are higher and occupied
+    """
     heights = [0 for i in range(COLS)]
 
     for j in range(len(state.grid[0])):
@@ -493,6 +578,9 @@ def well_depth(state):
 
 
 def hole_depth(state):
+    """
+    Returns depth of holes from surface (highest occupied cell)
+    """
     cumulative_holes = 0
 
     for j in range(len(state.grid[0])):
@@ -510,6 +598,9 @@ def hole_depth(state):
 
 
 def row_holes(state):
+    """
+    Returns number of rows with one or more holes
+    """
     row_holes = 0
 
     for i in range(len(state.grid) - 1, -1, -1):
@@ -532,6 +623,9 @@ def row_holes(state):
 
 
 def draw_text_middle(text, size, color, surface):
+    """
+    Draws title at the top
+    """
     font = pygame.font.SysFont('comicsans', size, bold=True)
     label = font.render(text, True, color)
 
@@ -540,6 +634,9 @@ def draw_text_middle(text, size, color, surface):
 
 
 def draw_grid_lines(surface):
+    """
+    Draws grid squares
+    """
     sx = TOP_LEFT_X
     sy = TOP_LEFT_Y
     for i in range(ROWS):
@@ -551,6 +648,9 @@ def draw_grid_lines(surface):
 
 
 def draw_next_shape(piece, surface):
+    """
+    Draws next shape in the right side of the screen
+    """
     font = pygame.font.SysFont('comicsans', 30)
     label = font.render('Next Shape', True, WHITE)
 
@@ -568,6 +668,9 @@ def draw_next_shape(piece, surface):
 
 
 def draw_eval_score(score, surface):
+    """
+    Draws the values for each feature in the cost function
+    """
     score_labels = ["landing h (l): ",
                     "erosion (e): ",
                     "row trans (delta r): ",
@@ -591,6 +694,10 @@ def draw_eval_score(score, surface):
 
 
 def draw_score(surface, score, lines, game, games):
+    """
+    Draws current score and lines cleared
+    """
+
     # display current score
     font = pygame.font.SysFont('comicsans', 30)
     label = font.render('Score: ' + str(score), True, (255, 255, 255))
@@ -608,6 +715,9 @@ def draw_score(surface, score, lines, game, games):
 
 
 def draw_window(surface, grid):
+    """
+    Draws current game state
+    """
     surface.fill(BLACK)
 
     # Tetris Title
@@ -627,6 +737,10 @@ def draw_window(surface, grid):
 
 
 def main(agent, game, games):
+    """
+    Game play
+    """
+
     state = GameState()
     clock = pygame.time.Clock()
     fall_time = 0
@@ -684,10 +798,17 @@ results = []
 
 
 def save_results(score, lines):
+    """
+    Saves the current score and lines for analysis
+    """
     results.append((score, lines))
 
 
 def out_results(games):
+    """
+    Display analysis after all games are played
+    """
+
     sum_score = 0
     sum_lines = 0
     min_score = float('inf')
@@ -718,6 +839,10 @@ def out_results(games):
 
 
 def main_menu():
+    """
+    Main menu allows the player to press a key when ready to start a game
+    """
+
     valid_agents = {
         'random': RandomAgent,
         'human': HumanAgent,
