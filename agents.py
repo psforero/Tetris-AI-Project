@@ -167,6 +167,16 @@ r_hole = -0.8
 # r_hole = -0.48165461989485614
 
 
+# # Evolved 3
+# height = -9.041564364224934
+# eroded = -5.2446778007698125
+# r_trans = -6.798929346666811
+# c_trans = -4.88818188493513
+# holes = -7.4563454017664
+# wells = -3.4705411151823267
+# h_depth = -0.8327545245398831
+# r_hole = -9.557194981156163
+
 class HandTunedAgent:
     def __init__(self):
         self.actions = Queue()

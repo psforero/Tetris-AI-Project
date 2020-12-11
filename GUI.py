@@ -166,6 +166,24 @@ class Piece(object):
         self.color = SHAPE_COLORS[SHAPES.index(shape)]
         self.rotation = 0  # number from 0-3
 
+    def get_height(self):
+        if self.shape == 3: # O
+            return 2
+        if self.shape == 0 or self.shape == 1: # S Z
+            if self.rotation == 0:
+                return 2
+            return 3
+        if self.shape == 2: # I
+            if self.rotation == 0:
+                return 4
+            return 1
+        # J L T
+        if self.rotation == 0 or self.rotation == 2:
+            return 2
+        return 3
+
+
+
 
 class GameState:
     LEFT = 1
@@ -375,13 +393,14 @@ def get_eval_score(state):
 
 
 def landing_height(state):  # changed to resulting height
-    j = state.get_result_piece(state).x
+    piece = state.get_result_piece(state)
+    j = piece.x
     height = 0
     for i in range(len(state.grid), -1, -1):
         if (j, i) in state.locked:
             height = i
 
-    return ROWS - height
+    return (ROWS - height) - piece.get_height()
 
 
 def eroded(state):  # missing * "contribution per piece"
