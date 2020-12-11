@@ -1,4 +1,4 @@
-import pygame # only for the human agent
+import pygame  # only for the human agent
 import torch
 from torch import nn
 from torch import optim
@@ -122,10 +122,10 @@ T = [['.....',
 
 SHAPES = [S, Z, I, O, J, L, T]
 
-
 """
 ///////////// RANDOM AGENT /////////////
 """
+
 
 class RandomAgent:
     def move(self, state):
@@ -136,7 +136,7 @@ class RandomAgent:
 ///////////// HAND-TUNED AGENT /////////////
 """
 
-# height, eroded, r trans, c trans, holes, wells, hole depth, row hole
+# Hand-tuned features
 height = -1.8
 eroded = 8.0
 r_trans = -0.6
@@ -145,6 +145,26 @@ holes = -8.0
 wells = -1.5
 h_depth = -2.2
 r_hole = -0.8
+
+# Evolved features 1
+# height = -2.1306096349182564
+# eroded = 8.552697855055499
+# r_trans = -5.661660754343927
+# c_trans = -5.491370913559688
+# holes = -7.375126110532342
+# wells = -1.7057363953795317
+# h_depth = -0.7460128685876022
+# r_hole = 7.706974493923113
+
+# Evolved features 2
+# height = -9.786398569548197
+# eroded = 5.047405002028459
+# r_trans = -5.286228424408696
+# c_trans = -9.263151272347127
+# holes = -9.981041606056698
+# wells = -5.1342472791909
+# h_depth = -0.24235483967608396
+# r_hole = -0.48165461989485614
 
 
 class HandTunedAgent:
@@ -158,7 +178,7 @@ class HandTunedAgent:
 
         self.search(state)
 
-        #return HARD_DROP
+        # return HARD_DROP
 
     def search(self, state):
 
@@ -307,6 +327,7 @@ class GeneticAgent:
         parents = graded[(len(graded) - retain_length):]
         self.best_fs = parents[len(parents) - 1]
         print(self.best_fs)
+        self.save()
 
         # randomly add some worse-performing individuals
         for ind in graded[:(len(graded) - retain_length)]:
@@ -345,7 +366,7 @@ class GeneticAgent:
 
         self.search(state, weights)
 
-        #return HARD_DROP
+        # return HARD_DROP
 
     def search(self, state, weights):
 
@@ -409,7 +430,6 @@ class GeneticAgent:
         result = state.result()
         return self.calculate_score(result.get_eval_score(), weights)
 
-
     def calculate_score(self, score, weights):
         weighted_score = []
 
@@ -422,6 +442,7 @@ class GeneticAgent:
 """
 ///////////// NEURAL NETWORK AGENT /////////////
 """
+
 
 class NNAgent:
     def __init__(self):
@@ -446,7 +467,7 @@ class NNAgent:
 
         # Define optimizer
         self.optimizer = optim.Adam(self.network.parameters(),
-                           lr=0.01)
+                                    lr=0.01)
 
         self.action_space = np.arange(4)
 
@@ -455,7 +476,7 @@ class NNAgent:
         return action_probs
 
     def discount_rewards(self, rewards, gamma=0.99):
-        r = np.array([gamma**i * rewards[i] for i in range(len(rewards))])
+        r = np.array([gamma ** i * rewards[i] for i in range(len(rewards))])
         # Reverse the array direction for cumsum and then
         # revert back to the original order
         r = r[::-1].cumsum()[::-1]
@@ -466,7 +487,7 @@ class NNAgent:
         nn_input = np.zeros(200 + 4)
 
         for y, x in state.locked.keys():
-            nn_input[10*y + x] = 1
+            nn_input[10 * y + x] = 1
 
         nn_input[200] = state.current.x
         nn_input[201] = state.current.y
