@@ -1,4 +1,4 @@
-import pygame # only for the human agent
+import pygame  # only for the human agent
 import torch
 from torch import nn
 from torch import optim
@@ -122,14 +122,21 @@ T = [['.....',
 
 SHAPES = [S, Z, I, O, J, L, T]
 
+"""
+///////////// RANDOM AGENT /////////////
+"""
+
 
 class RandomAgent:
-
     def move(self, state):
         return random.choice(MOVES)
 
 
-# height, eroded, r trans, c trans, holes, wells, hole depth, row hole
+"""
+///////////// HAND-TUNED AGENT /////////////
+"""
+
+# Hand-tuned features
 height = -1.8
 eroded = 8.0
 r_trans = -0.6
@@ -139,6 +146,36 @@ wells = -1.5
 h_depth = -2.2
 r_hole = -0.8
 
+# Evolved features 1
+# height = -2.1306096349182564
+# eroded = 8.552697855055499
+# r_trans = -5.661660754343927
+# c_trans = -5.491370913559688
+# holes = -7.375126110532342
+# wells = -1.7057363953795317
+# h_depth = -0.7460128685876022
+# r_hole = 7.706974493923113
+
+# Evolved features 2
+# height = -9.786398569548197
+# eroded = 5.047405002028459
+# r_trans = -5.286228424408696
+# c_trans = -9.263151272347127
+# holes = -9.981041606056698
+# wells = -5.1342472791909
+# h_depth = -0.24235483967608396
+# r_hole = -0.48165461989485614
+
+
+# # Evolved 3
+# height = -9.041564364224934
+# eroded = -5.2446778007698125
+# r_trans = -6.798929346666811
+# c_trans = -4.88818188493513
+# holes = -7.4563454017664
+# wells = -3.4705411151823267
+# h_depth = -0.8327545245398831
+# r_hole = -9.557194981156163
 
 class HandTunedAgent:
     def __init__(self):
@@ -151,7 +188,7 @@ class HandTunedAgent:
 
         self.search(state)
 
-        #return HARD_DROP
+        # return HARD_DROP
 
     def search(self, state):
 
@@ -225,6 +262,198 @@ class HandTunedAgent:
         return sum(weighted_score)
 
 
+"""
+///////////// GENETIC AGENT /////////////
+"""
+
+MAX_WEIGHT = 10
+MIN_WEIGHT = -10
+FEATURES = 8
+
+
+class GeneticAgent:
+
+    def __init__(self, pop_count=20, cutoff=1000):
+        self.pop = self.population(pop_count)
+        self.cutoff = cutoff
+        self.best_fs = np.zeros(FEATURES)
+        self.evolutions = 1
+        self.actions = Queue()
+
+    # parse a previously generated feature set
+    # to avoid rerunning the evolution
+    def load(self, data):
+        for i in range(data.len):
+            self.best_fs[i] = data[i]
+
+    # format the feature weights to dump into txt file
+    def save(self):
+        features = open("features.txt", "w")
+        for feature in self.best_fs:
+            features.write(str(feature) + '\n')
+
+    # create a feature set with random weights
+    def individual(self):
+        fs = []
+        for i in range(FEATURES):
+            fs.append(random.uniform(MIN_WEIGHT, MAX_WEIGHT))
+        return fs
+
+    # create a population of feature sets with pop_count members
+    def population(self, pop_count):
+        pop = []
+        for i in range(pop_count):
+            pop.append(self.individual())
+        return pop
+
+    # determine the fitness of a feature set (score obtained using this fs)
+    # have the agent simulate play using this feature set and retain the score
+    def fitness(self, fs, start_state):
+        drops = 0
+        state = start_state
+
+        while not state.lost and drops <= self.cutoff:
+            state = state.do_action(self.move(state, fs))
+            drops += 1
+        print(fs)
+        if state.score > 0:
+            print(state.score + drops)
+            return state.score + drops
+        else:
+            print(drops)
+            return drops
+
+    def train(self, state):
+        self.evolve(state)
+
+    # run one iteration of evolution for this agent's feature set
+    # save the best one
+    def evolve(self, start_state, retain=0.2, random_select=0.05, mutate=0.1):
+        # determine fitness of each individual, sort them by fitness, then
+        # get the individuals we will use to reproduce
+        graded = [(self.fitness(ind, start_state), ind) for ind in self.pop]
+        graded = [ind[1] for ind in sorted(graded)]
+        retain_length = int(len(graded) * retain)
+        parents = graded[(len(graded) - retain_length):]
+        self.best_fs = parents[len(parents) - 1]
+        print(self.best_fs)
+        self.save()
+
+        # randomly add some worse-performing individuals
+        for ind in graded[:(len(graded) - retain_length)]:
+            if random_select > random.random():
+                parents.append(ind)
+
+        # mutate some individuals, picking a random new weight for one feature
+        for ind in parents:
+            if mutate > random.random():
+                mutate_feature = random.randint(0, FEATURES - 1)
+                ind[mutate_feature] = random.uniform(MIN_WEIGHT, MAX_WEIGHT)
+
+        # crossover parents to generate children
+        parents_length = len(parents)
+        desired_length = len(self.pop) - parents_length
+        children = []
+        while len(children) < desired_length:
+            male = random.randint(0, parents_length - 1)
+            female = random.randint(0, parents_length - 1)
+            if male != female:
+                male = parents[male]
+                female = parents[female]
+                half = len(male) // 2
+                child = male[:half] + female[half:]
+                children.append(child)
+
+        parents.extend(children)
+        self.pop = parents
+        print('evolution ' + str(self.evolutions) + ' finished!')
+        self.evolutions += 1
+
+    def move(self, state, weights=[]):
+
+        if not self.actions.empty():
+            return self.actions.get()
+
+        self.search(state, weights)
+
+        # return HARD_DROP
+
+    def search(self, state, weights):
+
+        # Check left
+        state_left = copy.deepcopy(state)
+        max_score_left = self.get_score_after_moves(state_left, self.actions, weights)
+        rotations_left = 0
+        moves_left = 0
+        for side in range(6):
+            # Check rotation
+            for rotation in range(len(state_left.current.shape)):
+                result = state_left.result()
+                score = self.calculate_score(result.get_eval_score(), weights)
+
+                if score > max_score_left:
+                    max_score_left = score
+                    rotations_left = rotation
+                    moves_left = side
+
+                state_left = state_left.do_action(ROTATE)
+            state_left = state_left.do_action(LEFT)
+
+        # Check right
+        state_right = copy.deepcopy(state)
+        max_score_right = self.get_score_after_moves(state_right, self.actions, weights)
+        rotations_right = 0
+        moves_right = 0
+
+        for side in range(5):
+            # Check rotation
+            for rotation in range(len(state_right.current.shape)):
+                result = state_right.result()
+                score = self.calculate_score(result.get_eval_score(), weights)
+
+                if score > max_score_right:
+                    max_score_right = score
+                    rotations_right = rotation
+                    moves_right = side
+
+                state_right = state_right.do_action(ROTATE)
+            state_right = state_right.do_action(RIGHT)
+
+        if max_score_left > max_score_right:
+            for i in range(rotations_left):
+                self.actions.put(ROTATE)
+
+            for i in range(moves_left):
+                self.actions.put(LEFT)
+        else:
+            for i in range(rotations_right):
+                self.actions.put(ROTATE)
+
+            for i in range(moves_right):
+                self.actions.put(RIGHT)
+
+        self.actions.put(HARD_DROP)
+
+    def get_score_after_moves(self, state, actions, weights):
+        for elem in list(actions.queue):
+            state = state.do_action(elem)
+        result = state.result()
+        return self.calculate_score(result.get_eval_score(), weights)
+
+    def calculate_score(self, score, weights):
+        weighted_score = []
+
+        for f in range(len(score)):
+            weighted_score.append(score[f] * weights[f])
+
+        return sum(weighted_score)
+
+
+"""
+///////////// NEURAL NETWORK AGENT /////////////
+"""
+
+
 class NNAgent:
     def __init__(self):
         self.n_inputs = 19
@@ -256,7 +485,7 @@ class NNAgent:
         return action_probs
 
     def discount_rewards(self, rewards, gamma=0.99):
-        r = np.array([gamma**i * rewards[i] for i in range(len(rewards))])
+        r = np.array([gamma ** i * rewards[i] for i in range(len(rewards))])
         # Reverse the array direction for cumsum and then
         # revert back to the original order
         r = r[::-1].cumsum()[::-1]
