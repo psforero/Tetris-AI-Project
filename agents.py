@@ -121,14 +121,14 @@ T = [['.....',
 SHAPES = [S, Z, I, O, J, L, T]
 
 # height, eroded, r trans, c trans, holes, wells, hole depth, row hole
-h = -3.0
-e = 6.0
-r_t = -2.0
-c_t = -1.0
-h_t = -5.0
-w = -2.0
-h_d = -2.0
-r_h = -1.5
+h = -27
+e = 27
+r_t = -25
+c_t = 14
+h_t = -23
+w = 0
+h_d = -16
+r_h = -16
 
 class NaiveAgent:
 
@@ -180,16 +180,17 @@ MIN_WEIGHT = -30
 FEATURES = 8
 class GeneticAgent:
     
-    def __init__(self, pop_count=20, cutoff=98):
+    def __init__(self, pop_count=20, cutoff=1000):
         self.pop = self.population(pop_count)
         self.cutoff = cutoff
         self.best_fs = np.zeros(FEATURES)
+        self.evolutions = 1
     
     #parse a previously generated feature set
     #to avoid rerunning the evolution
     def load(self, data):
         for i in range(data.len):
-            self.best_fs
+            self.best_fs[i] = data[i]
        
     #format the feature weights to dump into txt file
     def save(self):
@@ -220,9 +221,10 @@ class GeneticAgent:
         while not state.lost and drops <= self.cutoff:
             state = state.do_action(self.move(state, fs))
             drops += 1
+        print(fs)
         if state.score > 0:
-            print(state.score)
-            return state.score
+            print(state.score + drops)
+            return state.score + drops
         else:
             print(drops)
             return drops
@@ -232,25 +234,27 @@ class GeneticAgent:
     
     #run one iteration of evolution for this agent's feature set
     #save the best one
-    def evolve(self, start_state, retain = 0.2, random_select = 0.05, mutate = 0.01):
+    def evolve(self, start_state, retain = 0.2, random_select = 0.05, mutate = 0.1):
         #determine fitness of each individual, sort them by fitness, then
         #get the individuals we will use to reproduce
         graded = [(self.fitness(ind, start_state), ind) for ind in self.pop]
         graded = [ind[1] for ind in sorted(graded)]
-        print(graded)
         retain_length = int(len(graded) * retain)
-        parents = graded[retain_length:]
+        parents = graded[(len(graded) - retain_length):]
+        self.best_fs = parents[len(parents) - 1]
+        print(self.best_fs)
             
         #randomly add some worse-performing individuals
-        for ind in graded[:retain_length]:
+        for ind in graded[:(len(graded) - retain_length)]:
             if random_select > random.random():
                 parents.append(ind)
                     
-        #mutate some individuals, replacing a feature weight with a random new one
+        #mutate some individuals, picking a random new weight for one feature
         for ind in parents:
             if mutate > random.random():
                 mutate_feature = random.randint(0, FEATURES - 1)
                 ind[mutate_feature] = random.randint(MIN_WEIGHT, MAX_WEIGHT)
+                    
                     
         #crossover parents to generate children
         parents_length = len(parents)
@@ -267,15 +271,13 @@ class GeneticAgent:
                 children.append(child)
 
         parents.extend(children)
-        self.best_fs = parents[len(parents) - 1]
         self.pop = parents
-        print(self.best_fs)
-        print(self.fitness(self.best_fs, start_state))
-        print('evolution done!')
+        print('evolution ' + str(self.evolutions) + ' finished!')
+        self.evolutions += 1
 
     #hard drop the piece once it is above the best state
     def move(self, state, weights=[]):
-        if self.actions.empty() and not weights:
+        if self.actions.empty() and len(weights) == 0:
             self.search(state, self.best_fs)
         elif self.actions.empty():
             self.search(state, weights)
@@ -302,7 +304,7 @@ class GeneticAgent:
             valid_rotations.append(rotate_state)
         #iterate through the shape rotations and check each location
         max_score = float('-inf')
-        best_state = None
+        best_state = state
         current_rotation = 0
         best_rotation = 0
         for state in valid_rotations:
