@@ -129,10 +129,6 @@ class RandomAgent:
         return random.choice(MOVES)
 
 
-
-
-
-
 # height, eroded, r trans, c trans, holes, wells, hole depth, row hole
 height = -1.8
 eroded = 8.0
@@ -231,26 +227,19 @@ class HandTunedAgent:
 
 class NNAgent:
     def __init__(self):
-        #self.n_inputs = 204
-        self.n_inputs = 20
-        self.n_outputs = 5
+        self.n_inputs = 19
+        self.n_outputs = 4
         
         # Define network
         self.network = nn.Sequential(
             nn.Linear(self.n_inputs, 20),
             nn.ReLU(),  
-            # nn.Dropout(0.2),  
-            # nn.Linear(20, 10),
-            # nn.ReLU(),  
-            # nn.Dropout(0.2),  
+            nn.Dropout(0.2),  
+            nn.Linear(20, 20),
+            nn.ReLU(),  
+            nn.Dropout(0.2),  
             nn.Linear(20, self.n_outputs),
             nn.Softmax(dim=-1))
-        # self.network = nn.Sequential(
-        #     nn.Linear(self.n_inputs, 32),
-        #     nn.ReLU(),  
-        #     nn.Dropout(0.2),  
-        #     nn.Linear(32, self.n_outputs),
-        #     nn.Softmax(dim=-1))
 
         self.total_rewards = []
         self.batch_rewards = []
@@ -259,9 +248,8 @@ class NNAgent:
         self.batch_counter = 1
 
         # Define optimizer
-        self.optimizer = optim.Adam(self.network.parameters(), lr=0.005)
-    
-        self.action_space = np.arange(1, 6)
+        self.optimizer = optim.Adam(self.network.parameters(), lr=0.01)
+        self.action_space = np.arange(1, 5)
     
     def predict(self, state):
         action_probs = self.network(torch.FloatTensor(state))
@@ -275,7 +263,8 @@ class NNAgent:
         return r - r.mean()
 
     def vectorize(self, state):
-        # entire grid + current piece
+        # create input array using the upper contour of the terrain of 
+        # locked pieces on the board, and the current shape and its details
         nn_input = np.zeros(self.n_inputs)
 
         minimums = np.zeros(10)
@@ -291,23 +280,12 @@ class NNAgent:
             nn_input[10 + i] = current_shape == i
 
         nn_input[17] = state.current.x
-        nn_input[18] = state.current.y
-        nn_input[19] = state.current.rotation
-
-        #nn_input[12] = SHAPES.index(state.current.shape)
-
-        # for y, x in state.locked.keys():
-        #     nn_input[10*y + x] = 1
-        
-        # nn_input[200] = state.current.x
-        # nn_input[201] = state.current.y
-        # nn_input[202] = SHAPES.index(state.current.shape)
-        # nn_input[203] = state.current.rotation
+        nn_input[18] = state.current.rotation
 
         return np.array(nn_input)
 
     def calculate_score(self, score):
-        weights = [h, e, r_t, c_t, h_t, w, h_d, r_h]
+        weights = [height, eroded, r_trans, c_trans, holes, wells, h_depth, r_hole]
         weighted_score = []
 
         for f in range(len(score)):
@@ -316,8 +294,8 @@ class NNAgent:
         return sum(weighted_score)
 
     def train(self, state):
-        gamma = 0.99
-        batch_size = 32
+        gamma = 0.9
+        batch_size = 2048
 
         init_state = state
         states = []
@@ -327,12 +305,12 @@ class NNAgent:
         runs = 0
         last_score = 0
 
-        while not state.lost and runs < 5:
+        while not state.lost:
             moves = 0
-            random_moves = np.random.random() < 0.1
+            random_moves = np.random.random() < 0.3
             runs += 1
 
-            while not state.lost and moves < 5:
+            while not state.lost:
                 moves += 1
                 last_state = state
 
@@ -346,28 +324,18 @@ class NNAgent:
                     action = np.random.choice(self.action_space, p=action_probs)
 
                 state = state.do_action(action)
+                state = state.do_action(state.DOWN)
                 done = state.lost
-
-                #scores = state.get_eval_score()
-                #r = scores[1] - scores[0] # * 10
-
-
-                # if state.piece_num > last_state.piece_num:
-                #     r += 10
-
-                #r += last_state.score - state.score
-
-                # if done:
-                #     r -= 1000
 
                 states.append(self.vectorize(last_state))
                 actions.append(action - 1)
-            
-            r = self.calculate_score(state.get_eval_score())
-            state = state.do_action(state.HARD_DROP)
-
-            for i in range(moves):
+                
+                scores = state.get_eval_score()
+                r = self.calculate_score(scores)
                 rewards.append(r)
+
+                if state.piece_num > last_state.piece_num:
+                    break
 
             #if state.piece_num > last_state.piece_num:
             self.batch_rewards.extend(self.discount_rewards(rewards, gamma))
@@ -385,17 +353,16 @@ class NNAgent:
                 self.optimizer.zero_grad()
                 state_tensor = torch.FloatTensor(self.batch_states)
                 reward_tensor = torch.FloatTensor(self.batch_rewards)
-                # Actions are used as indices, must be LongTensor
                 action_tensor = torch.LongTensor([self.batch_actions])
+
                 # Calculate loss
                 logprob = torch.log(self.predict(state_tensor))
-
                 selected_logprobs = reward_tensor * torch.gather(logprob, 1, action_tensor).squeeze()
-
                 loss = -selected_logprobs.mean()
                 
                 # Calculate gradients
                 loss.backward()
+
                 # Apply gradients
                 self.optimizer.step()
                 
@@ -409,9 +376,6 @@ class NNAgent:
             print("\rAverage of last 100 actions: {:.2f}".format(avg_rewards), end="")
     
     def move(self, state):
-        action_probs = self.predict(self.vectorize(state)).detach().numpy()
-        print(action_probs)
-
         return torch.argmax(self.predict(self.vectorize(state))).detach() + 1
 
     def save(self):

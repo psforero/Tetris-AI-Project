@@ -299,7 +299,6 @@ def create_grid(locked_positions={}):
 
 
 def get_shape():
-    return Piece(COLS // 2, 2, SHAPES[3])
     return Piece(COLS // 2, 2, random.choice(SHAPES))
 
 
@@ -615,7 +614,7 @@ def main(agent, game, games):
     actions_taken = 0
 
     while not state.lost:
-        fall_speed = 0.6
+        fall_speed = 0.05
         fall_time += clock.get_rawtime()
         clock.tick()
 
@@ -719,9 +718,6 @@ def main_menu():
     if args.outfile:
         print('Training ...')
         for each in range(args.trials):
-            if each % 10 == 0:
-                print("\n{} / {}".format(each, args.trials))
-
             agent.train(GameState())
 
         if args.outfile:
