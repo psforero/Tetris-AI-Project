@@ -8,7 +8,7 @@ import pickle
 from agents import (
     HumanAgent,
     HandTunedAgent,
-    NaiveAgent,
+    RandomAgent,
     NNAgent,
 )
 
@@ -151,7 +151,6 @@ T = [['.....',
 # index 0 - 6 represent shape
 SHAPES = [S, Z, I, O, J, L, T]
 SHAPE_COLORS = [GREEN, RED, CYAN, YELLOW, ORANGE, BLUE, PURPLE]
-
 
 """
 ///////////// GAME LOGIC ////////////////
@@ -504,6 +503,7 @@ def row_holes(state):
 
     return row_holes
 
+
 """
 ///////////// DRAWING FUNCTIONS /////////////
 """
@@ -568,7 +568,7 @@ def draw_eval_score(score, surface):
         surface.blit(label, (sx + 10, sy - 30))
 
 
-def draw_score(surface, score, lines):
+def draw_score(surface, score, lines, game, games):
     # display current score
     font = pygame.font.SysFont('comicsans', 30)
     label = font.render('Score: ' + str(score), True, (255, 255, 255))
@@ -577,6 +577,10 @@ def draw_score(surface, score, lines):
     surface.blit(label, (sx + 20, sy + 160))
 
     label = font.render('Lines: ' + str(lines), True, (255, 255, 255))
+    sy += 50
+    surface.blit(label, (sx + 20, sy + 160))
+
+    label = font.render('Game: ' + str(game+1) + "/" + str(games), True, (255, 255, 255))
     sy += 50
     surface.blit(label, (sx + 20, sy + 160))
 
@@ -600,7 +604,7 @@ def draw_window(surface, grid):
     pygame.draw.rect(surface, GRAY, (TOP_LEFT_X, TOP_LEFT_Y, PLAY_WIDTH, PLAY_HEIGHT), 5)
 
 
-def main(agent):
+def main(agent, game, games):
     state = GameState()
     clock = pygame.time.Clock()
     fall_time = 0
@@ -620,7 +624,7 @@ def main(agent):
         if fall_time / 1000 >= fall_speed:
             fall_time = 0
             state = state.do_action(GameState.DOWN)
-        
+
         # EVENTS - AGENT MOVE
         if fall_time / 200 >= fall_speed:
             action = agent.move(state)
@@ -643,18 +647,60 @@ def main(agent):
 
         draw_window(win, result.grid)
         draw_next_shape(state.next, win)
-        draw_score(win, state.score, state.lines_cleared)
+        draw_score(win, state.score, state.lines_cleared, game, games)
         draw_eval_score(score, win)
         pygame.display.update()
 
+        if state.lost:
+            final_score = state.score
+            final_lines = state.lines_cleared
+            save_results(final_score, final_lines)
+
     draw_text_middle("You Lost", 40, WHITE, win)
     pygame.display.update()
-    pygame.time.delay(2000)
+    pygame.time.delay(10)
+
+
+results = []
+
+
+def save_results(score, lines):
+    results.append((score, lines))
+
+
+def out_results(games):
+    sum_score = 0
+    sum_lines = 0
+    min_score = float('inf')
+    max_score = 0
+    min_lines = float('inf')
+    max_lines = 0
+    for s, l in results:
+        sum_score += s
+        sum_lines += l
+        if s < min_score:
+            min_score = s
+        if s > max_score:
+            max_score = s
+        if l < min_lines:
+            min_lines = l
+        if l > max_lines:
+            max_lines = l
+
+    print("Games played: {}".format(games))
+    print("Total score: {}".format(sum_score))
+    print("Total lines: {}".format(sum_lines))
+    print("Average score: {}".format(sum_score // games))
+    print("Average lines: {}".format(sum_lines // games))
+    print("Min score: {}".format(min_score))
+    print("Max score: {}".format(max_score))
+    print("Min lines: {}".format(min_lines))
+    print("Max lines: {}".format(max_lines))
 
 
 def main_menu():
     valid_agents = {
-        'naive': NaiveAgent,
+        'random': RandomAgent,
         'human': HumanAgent,
         'hand': HandTunedAgent,
         'neural': NNAgent,
@@ -663,6 +709,7 @@ def main_menu():
     parser = argparse.ArgumentParser()
     parser.add_argument('--agent', choices=valid_agents.keys(), default='human')
     parser.add_argument('--trials', type=int, default=1000)
+    parser.add_argument('--games', type=int, default=1)
     parser.add_argument('--infile', required=False, type=argparse.FileType('rb'))
     parser.add_argument('--outfile', required=False, type=argparse.FileType('w+b'))
     args = parser.parse_args()
@@ -674,12 +721,12 @@ def main_menu():
         print(args.trials)
         for each in range(args.trials):
             agent.train(GameState())
-        
+
         if args.outfile:
             data = agent.save()
             pickle.dump(data, args.outfile)
         sys.exit(0)
-    
+
     if args.infile:
         data = pickle.load(args.infile)
         agent.load(data)
@@ -694,10 +741,13 @@ def main_menu():
                 run = False
 
             if event.type == pygame.KEYDOWN:
-                main(agent)
+                for g in range(args.games):
+                    main(agent, g, args.games)
+                out_results(args.games)
     pygame.quit()
+
 
 win = pygame.display.set_mode((S_WIDTH, S_HEIGHT))
 pygame.display.set_caption('Tetris')
 
-main_menu()  # start game
+main_menu()

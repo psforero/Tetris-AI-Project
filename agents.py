@@ -5,6 +5,7 @@ from torch import optim
 import numpy as np
 from queue import Queue
 import copy
+import random
 
 COLS = 10
 ROWS = 20
@@ -14,6 +15,8 @@ RIGHT = 2
 DOWN = 3
 ROTATE = 4
 HARD_DROP = 5
+
+MOVES = [LEFT, RIGHT, ROTATE, HARD_DROP]
 
 S = [['.....',
       '.....',
@@ -120,28 +123,11 @@ T = [['.....',
 SHAPES = [S, Z, I, O, J, L, T]
 
 
-class NaiveAgent:
-
-    def __init__(self):
-        self.weights = []
-
-    def train(self, state):
-        actions = 0
-        while not state.lost:
-            actions += 1
-            state = state.do_action(state.DOWN)
-
-        self.weights.append(actions)
+class RandomAgent:
 
     def move(self, state):
-        return state.DOWN
+        return random.choice(MOVES)
 
-    def save(self):
-        return self.weights
-
-    def load(self, data):
-        print(data)
-        self.weights = data
 
 
 # height, eroded, r trans, c trans, holes, wells, hole depth, row hole
