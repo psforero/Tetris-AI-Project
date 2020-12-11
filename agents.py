@@ -148,11 +148,11 @@ class NaiveAgent:
 
 
 # height, eroded, r trans, c trans, holes, wells, hole depth, row hole
-h = -3.0
+h = -4.0
 e = 4.0
 r_t = -1.0
 c_t = -1.0
-h_t = -5.0
+h_t = -4.0
 w = -3.0
 h_d = -1.0
 r_h = -1.5
@@ -241,32 +241,29 @@ class HandTunedAgent:
 
         return sum(weighted_score)
 
-def density(state):
-    total = 0
-    filled = 0
-    for i in range(len(state.grid) - 1, -1, -1):
-        row = state.grid[i]
-        has_pieces = False
-        for j in range(len(row)):
-            total += 1
-            if (j, i) in state.locked:
-                has_pieces = True
-                filled += 1
-        if not has_pieces:
-            break
-    return total - filled
 
 class NNAgent:
     def __init__(self):
-        self.n_inputs = 12
-        self.n_outputs = 4
+        #self.n_inputs = 204
+        self.n_inputs = 20
+        self.n_outputs = 5
         
         # Define network
         self.network = nn.Sequential(
-            nn.Linear(self.n_inputs, 8), 
+            nn.Linear(self.n_inputs, 20),
             nn.ReLU(),  
-            nn.Linear(8, self.n_outputs),
+            # nn.Dropout(0.2),  
+            # nn.Linear(20, 10),
+            # nn.ReLU(),  
+            # nn.Dropout(0.2),  
+            nn.Linear(20, self.n_outputs),
             nn.Softmax(dim=-1))
+        # self.network = nn.Sequential(
+        #     nn.Linear(self.n_inputs, 32),
+        #     nn.ReLU(),  
+        #     nn.Dropout(0.2),  
+        #     nn.Linear(32, self.n_outputs),
+        #     nn.Softmax(dim=-1))
 
         self.total_rewards = []
         self.batch_rewards = []
@@ -275,10 +272,9 @@ class NNAgent:
         self.batch_counter = 1
     
         # Define optimizer
-        self.optimizer = optim.Adam(self.network.parameters(), 
-                           lr=0.01)
+        self.optimizer = optim.Adam(self.network.parameters(), lr=0.005)
     
-        self.action_space = np.arange(4)
+        self.action_space = np.arange(1, 6)
     
     def predict(self, state):
         action_probs = self.network(torch.FloatTensor(state))
@@ -292,173 +288,143 @@ class NNAgent:
         return r - r.mean()
 
     def vectorize(self, state):
-        # cost function results + current piece
-        nn_input = []
-        
-        for k in state.get_eval_score():
-            nn_input.append(k)
+        # entire grid + current piece
+        nn_input = np.zeros(self.n_inputs)
+
+        minimums = np.zeros(10)
+        for x, y in state.locked.keys():
+            minimums[x] = min(minimums[x], 20-y)
+            nn_input[x] = max(nn_input[x], 20-y)
+
+        for x in range(10):
+            nn_input[x] -= minimums.min()
+
+        current_shape = SHAPES.index(state.current.shape)
+        for i in range(len(SHAPES)):
+            nn_input[10 + i] = current_shape == i
+
+        nn_input[17] = state.current.x
+        nn_input[18] = state.current.y
+        nn_input[19] = state.current.rotation
+
+        #nn_input[12] = SHAPES.index(state.current.shape)
 
         # for y, x in state.locked.keys():
         #     nn_input[10*y + x] = 1
         
-        nn_input.append(state.current.x)
-        nn_input.append(state.current.y)
-        nn_input.append(SHAPES.index(state.current.shape))
-        nn_input.append(state.current.rotation)
+        # nn_input[200] = state.current.x
+        # nn_input[201] = state.current.y
+        # nn_input[202] = SHAPES.index(state.current.shape)
+        # nn_input[203] = state.current.rotation
+
         return np.array(nn_input)
+
+    def calculate_score(self, score):
+        weights = [h, e, r_t, c_t, h_t, w, h_d, r_h]
+        weighted_score = []
+
+        for f in range(len(score)):
+            weighted_score.append(score[f] * weights[f])
+
+        return sum(weighted_score)
 
     def train(self, state):
         gamma = 0.99
-        batch_size = 20
-        epsilon = 1.0
+        batch_size = 32
 
         init_state = state
         states = []
         rewards = []
         actions = []
 
-        while not state.lost:
-            last_state = state
-            state = state.do_action(state.DOWN)
+        runs = 0
+        last_score = 0
 
-            # Get actions and convert to numpy array
-            action_probs = self.predict(self.vectorize(state)).detach().numpy()
+        while not state.lost and runs < 5:
+            moves = 0
+            random_moves = np.random.random() < 0.1
+            runs += 1
 
-            # prioritize exploration early in each batch, decreasing later
-            if (np.random < 1 - self.batch_counter * .05):
-                action = np.random.choice(self.action_space)
-            else:
-                action = np.random.choice(self.action_space, p=action_probs)
+            while not state.lost and moves < 5:
+                moves += 1
+                last_state = state
 
-            state = state.do_action(action + 1)
-            done = state.lost
+                # Get actions and convert to numpy array
+                action_probs = self.predict(self.vectorize(state)).detach().numpy()
 
-            costs = state.get_eval_score()
-            if density(state) < density(last_state):
-                density_r = 10
-            else:
-                density_r = -10
+                # occassionally play random moves to increase exploration
+                if random_moves:
+                    action = np.random.choice(self.action_space)
+                else:
+                    action = np.random.choice(self.action_space, p=action_probs)
 
-            r = last_state.score - state.score + density_r
+                state = state.do_action(action)
+                done = state.lost
+
+                #scores = state.get_eval_score()
+                #r = scores[1] - scores[0] # * 10
+
+
+                # if state.piece_num > last_state.piece_num:
+                #     r += 10
+
+                #r += last_state.score - state.score
+
+                # if done:
+                #     r -= 1000
+
+                states.append(self.vectorize(last_state))
+                actions.append(action - 1)
             
-            states.append(self.vectorize(last_state))
-            rewards.append(r)
-            actions.append(action)
+            r = self.calculate_score(state.get_eval_score())
+            state = state.do_action(state.HARD_DROP)
+
+            for i in range(moves):
+                rewards.append(r)
+
+            #if state.piece_num > last_state.piece_num:
+            self.batch_rewards.extend(self.discount_rewards(rewards, gamma))
+            self.batch_states.extend(states)
+            self.batch_actions.extend(actions)
+            self.batch_counter += 1
+            self.total_rewards.append(sum(rewards))
+
+            states = []
+            rewards = []
+            actions = []
             
-            # If done, batch data
-            if done:
-                self.batch_rewards.extend(self.discount_rewards(rewards, gamma))
-                self.batch_states.extend(states)
-                self.batch_actions.extend(actions)
-                self.batch_counter += 1
-                self.total_rewards.append(sum(rewards))
+            # If batch is complete, update network
+            if self.batch_counter == batch_size:
+                self.optimizer.zero_grad()
+                state_tensor = torch.FloatTensor(self.batch_states)
+                reward_tensor = torch.FloatTensor(self.batch_rewards)
+                # Actions are used as indices, must be LongTensor
+                action_tensor = torch.LongTensor([self.batch_actions])
+                # Calculate loss
+                logprob = torch.log(self.predict(state_tensor))
+
+                selected_logprobs = reward_tensor * torch.gather(logprob, 1, action_tensor).squeeze()
+
+                loss = -selected_logprobs.mean()
                 
-                # If batch is complete, update network
-                if self.batch_counter == batch_size:
-                    self.optimizer.zero_grad()
-                    state_tensor = torch.FloatTensor(self.batch_states)
-                    reward_tensor = torch.FloatTensor(self.batch_rewards)
-                    # Actions are used as indices, must be 
-                    # LongTensor
-                    action_tensor = torch.LongTensor([self.batch_actions])
-                    # Calculate loss
-                    logprob = torch.log(self.predict(state_tensor))
-
-                    selected_logprobs = reward_tensor * torch.gather(logprob, 1, action_tensor).squeeze()
-
-                    loss = -selected_logprobs.mean()
-                    
-                    # Calculate gradients
-                    loss.backward()
-                    # Apply gradients
-                    self.optimizer.step()
-                    
-                    self.batch_rewards = []
-                    self.batch_actions = []
-                    self.batch_states = []
-                    self.batch_counter = 1
-                    
-                avg_rewards = np.mean(self.total_rewards[-100:])
-                # Print running average
-                print("\rAverage of last 100: {:.2f}".format(avg_rewards), end="")
+                # Calculate gradients
+                loss.backward()
+                # Apply gradients
+                self.optimizer.step()
                 
-    def train_old(self, state):
-        gamma = 0.99
-        batch_size = 10
-
-        init_state = state
-        states = []
-        rewards = []
-        actions = []
-
-        while not state.lost:
-            last_state = state
-            state = state.do_action(state.DOWN)
-
-            # Get actions and convert to numpy array
-            action_probs = self.predict(self.vectorize(state)).detach().numpy()
-            action = np.random.choice(self.action_space, p=action_probs)
-
-            state = state.do_action(action + 1)
-            done = state.lost
-
-            costs = state.get_eval_score()
-            if density(state) < density(last_state):
-                density_r = 10
-            else:
-                density_r = -10
-
-            r = last_state.score - state.score # + density_r
-            
-            states.append(self.vectorize(last_state))
-            rewards.append(r)
-            actions.append(action)
-            
-            # If done, batch data
-            if done:
-                self.batch_rewards.extend(self.discount_rewards(rewards, gamma))
-                self.batch_states.extend(states)
-                self.batch_actions.extend(actions)
-                self.batch_counter += 1
-                self.total_rewards.append(sum(rewards))
+                self.batch_rewards = []
+                self.batch_actions = []
+                self.batch_states = []
+                self.batch_counter = 1
                 
-                # If batch is complete, update network
-                if self.batch_counter == batch_size:
-                    self.optimizer.zero_grad()
-                    state_tensor = torch.FloatTensor(self.batch_states)
-                    reward_tensor = torch.FloatTensor(self.batch_rewards)
-                    # Actions are used as indices, must be 
-                    # LongTensor
-                    action_tensor = torch.LongTensor([self.batch_actions])
-                    # Calculate loss
-                    logprob = torch.log(self.predict(state_tensor))
-
-                    selected_logprobs = reward_tensor * torch.gather(logprob, 1, action_tensor).squeeze()
-
-                    loss = -selected_logprobs.mean()
-                    
-                    # Calculate gradients
-                    loss.backward()
-                    # Apply gradients
-                    self.optimizer.step()
-                    
-                    self.batch_rewards = []
-                    self.batch_actions = []
-                    self.batch_states = []
-                    self.batch_counter = 1
-                    
-                avg_rewards = np.mean(self.total_rewards[-100:])
-                # Print running average
-                print("\rAverage of last 100: {:.2f}".format(avg_rewards), end="")
-                
+            avg_rewards = np.mean(self.total_rewards[-100:])
+            # Print running average
+            print("\rAverage of last 100 actions: {:.2f}".format(avg_rewards), end="")
+    
     def move(self, state):
         action_probs = self.predict(self.vectorize(state)).detach().numpy()
         print(action_probs)
-        action = np.random.choice(self.action_space, p=action_probs)
-        return action
 
-        outputs = self.predict(self.vectorize(state))
-        # print(outputs)
         return torch.argmax(self.predict(self.vectorize(state))).detach() + 1
     
     def save(self):

@@ -45,7 +45,7 @@ ORANGE = (255, 165, 0)
 BLUE = (0, 0, 255)
 PURPLE = (128, 0, 128)
 
-# TETRAMINOS
+# TETROMINOS
 
 S = [['.....',
       '.....',
@@ -151,8 +151,6 @@ T = [['.....',
 
 SHAPES = [S, Z, I, O, J, L, T]
 SHAPE_COLORS = [GREEN, RED, CYAN, YELLOW, ORANGE, BLUE, PURPLE]
-
-# index 0 - 6 represent shape
 
 
 """
@@ -299,6 +297,7 @@ def create_grid(locked_positions={}):
 
 
 def get_shape():
+    return Piece(COLS // 2, 2, SHAPES[3])
     return Piece(COLS // 2, 2, random.choice(SHAPES))
 
 
@@ -552,9 +551,9 @@ def draw_eval_score(score, surface):
                     "row trans (delta r): ",
                     "col trans (delta c): ",
                     "holes (L): ",
-                    "wells (W)",
-                    "hole depth (D)",
-                    "row holes (R)"]
+                    "wells (W): ",
+                    "hole depth (D): ",
+                    "row holes (R): "]
 
     font = pygame.font.SysFont('comicsans', 30)
     label = font.render('COST FUNCTION', True, WHITE)
@@ -619,13 +618,10 @@ def main(agent):
             state = state.do_action(GameState.DOWN)
         
         # EVENTS - AGENT MOVE
-        # if fall_time / 200 >= fall_speed:
-        #     action = agent.move(state)
-        #     if action:
-        #         state = state.do_action(action)
-
-        action = agent.move(state)
-        state = state.do_action(action)
+        if fall_time / 200 >= fall_speed:
+            action = agent.move(state)
+            if action:
+                state = state.do_action(action)
 
         shape_pos = convert_shape_format(state.current)
 
@@ -668,8 +664,10 @@ def main_menu():
 
     if args.outfile:
         print('Training ...')
-        print(args.trials)
         for each in range(args.trials):
+            if each % 10 == 0:
+                print("\n{} / {}".format(each, args.trials))
+
             agent.train(GameState())
         
         if args.outfile:
