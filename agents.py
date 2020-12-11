@@ -5,6 +5,7 @@ from torch import optim
 import numpy as np
 from queue import Queue
 import copy
+import random
 
 COLS = 10
 ROWS = 20
@@ -14,6 +15,8 @@ RIGHT = 2
 DOWN = 3
 ROTATE = 4
 HARD_DROP = 5
+
+MOVES = [LEFT, RIGHT, ROTATE, HARD_DROP]
 
 S = [['.....',
       '.....',
@@ -120,56 +123,39 @@ T = [['.....',
 SHAPES = [S, Z, I, O, J, L, T]
 
 
-class NaiveAgent:
+class RandomAgent:
 
-    def __init__(self):
-        self.weights = []
-
-    def train(self, state):
-        actions = 0
-        while not state.lost:
-            actions += 1
-            state = state.do_action(state.DOWN)
-        
-        self.weights.append(actions)
-        
     def move(self, state):
-        return state.DOWN
-    
-    def save(self):
-        return self.weights
-    
-    def load(self, data):
-        print(data)
-        self.weights = data
+        return random.choice(MOVES)
+
 
 
 
 
 
 # height, eroded, r trans, c trans, holes, wells, hole depth, row hole
-h = -4.0
-e = 4.0
-r_t = -1.0
-c_t = -1.0
-h_t = -4.0
-w = -3.0
-h_d = -1.0
-r_h = -1.5
+height = -1.8
+eroded = 8.0
+r_trans = -0.6
+c_trans = -0.6
+holes = -8.0
+wells = -1.5
+h_depth = -2.2
+r_hole = -0.8
 
 
 class HandTunedAgent:
     def __init__(self):
-        self.rotations = 0
         self.actions = Queue()
 
     def move(self, state):
-        self.search(state)
 
         if not self.actions.empty():
             return self.actions.get()
 
-        return HARD_DROP
+        self.search(state)
+
+        #return HARD_DROP
 
     def search(self, state):
 
@@ -178,7 +164,7 @@ class HandTunedAgent:
         max_score_left = self.get_score_after_moves(state_left, self.actions)
         rotations_left = 0
         moves_left = 0
-        for side in range(4):
+        for side in range(6):
             # Check rotation
             for rotation in range(len(state_left.current.shape)):
                 result = state_left.result()
@@ -190,7 +176,6 @@ class HandTunedAgent:
                     moves_left = side
 
                 state_left = state_left.do_action(ROTATE)
-
             state_left = state_left.do_action(LEFT)
 
         # Check right
@@ -209,8 +194,8 @@ class HandTunedAgent:
                     max_score_right = score
                     rotations_right = rotation
                     moves_right = side
-                state_right = state_right.do_action(ROTATE)
 
+                state_right = state_right.do_action(ROTATE)
             state_right = state_right.do_action(RIGHT)
 
         if max_score_left > max_score_right:
@@ -226,6 +211,8 @@ class HandTunedAgent:
             for i in range(moves_right):
                 self.actions.put(RIGHT)
 
+        self.actions.put(HARD_DROP)
+
     def get_score_after_moves(self, state, actions):
         for elem in list(actions.queue):
             state = state.do_action(elem)
@@ -233,7 +220,7 @@ class HandTunedAgent:
         return self.calculate_score(result.get_eval_score())
 
     def calculate_score(self, score):
-        weights = [h, e, r_t, c_t, h_t, w, h_d, r_h]
+        weights = [height, eroded, r_trans, c_trans, holes, wells, h_depth, r_hole]
         weighted_score = []
 
         for f in range(len(score)):
@@ -270,7 +257,7 @@ class NNAgent:
         self.batch_actions = []
         self.batch_states = []
         self.batch_counter = 1
-    
+
         # Define optimizer
         self.optimizer = optim.Adam(self.network.parameters(), lr=0.005)
     
@@ -426,10 +413,10 @@ class NNAgent:
         print(action_probs)
 
         return torch.argmax(self.predict(self.vectorize(state))).detach() + 1
-    
+
     def save(self):
         return self.network.state_dict()
-    
+
     def load(self, data):
         self.network.load_state_dict(data)
         self.network.eval()
