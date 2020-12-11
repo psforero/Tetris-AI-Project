@@ -9,6 +9,7 @@ from agents import (
     HumanAgent,
     HandTunedAgent,
     RandomAgent,
+    GeneticAgent,
     NNAgent,
 )
 
@@ -704,6 +705,7 @@ def main_menu():
         'human': HumanAgent,
         'hand': HandTunedAgent,
         'neural': NNAgent,
+        'genetic': GeneticAgent
     }
 
     parser = argparse.ArgumentParser()
